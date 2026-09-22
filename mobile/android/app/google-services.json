@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "165332899972",
+    "project_id": "lifereset-556c7",
+    "storage_bucket": "lifereset-556c7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:165332899972:android:86e21d78597248e8414ad1",
+        "android_client_info": {
+          "package_name": "app.stylo.styloai"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "165332899972-c150scdvfj0jv3qit03fdojf5j5l3j9g.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA6--MwKQfi10M0QWLUscgKS95rIpZirz0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "165332899972-c150scdvfj0jv3qit03fdojf5j5l3j9g.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

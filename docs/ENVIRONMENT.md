@@ -53,8 +53,8 @@ git-ignored, so it can never be committed.
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | **yes** | Admin SDK (verify ID tokens + send FCM) — JSON or path via SSM |
 | `GEMINI_API_KEY` | **yes** | Google Gemini image API key |
 | `GEMINI_MODEL` | no | model id / default |
-| `AWS_REGION` | no | e.g. `ap-south-1` |
-| `S3_BUCKET` | no | media bucket name |
+| `AWS_REGION` | no | **production: `ap-south-1`** (Asia Pacific – Mumbai) |
+| `S3_BUCKET` | no | **production: `styloai-prod-assets-2026`** (private media bucket) |
 | `S3_UPLOAD_URL_TTL` | no | presign expiry seconds |
 | `CLOUDFRONT_DOMAIN` | no | CDN domain for signed delivery |
 | `CLOUDFRONT_KEY_PAIR_ID` | **yes** | signed-URL key pair id |

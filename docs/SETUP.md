@@ -80,9 +80,19 @@ Credit product IDs used everywhere: **`credits_50`, `credits_120`, `credits_300`
 
 ## 3. AWS — S3 (image storage)
 
-1. **console.aws.amazon.com → S3 → Create bucket.** Name e.g. `stylo-media`,
-   pick a region (remember it), **Block all public access = ON**, create.
-   - Bucket name → backend `.env` **`S3_BUCKET`**; region → **`AWS_REGION`**.
+**Production values (already created):**
+| Setting | Value | Backend `.env` variable |
+|---|---|---|
+| Bucket name | `styloai-prod-assets-2026` | `S3_BUCKET=styloai-prod-assets-2026` |
+| Region | `ap-south-1` (Asia Pacific – Mumbai) | `AWS_REGION=ap-south-1` |
+
+1. The bucket **`styloai-prod-assets-2026`** exists in **`ap-south-1`** with
+   **Block all public access = ON**. Put the two values above into the backend
+   `.env` on the server, then `pm2 restart stylo-api`.
+   > Keep every other AWS resource (RDS, EC2, CloudFront) in **`ap-south-1`** too,
+   > so images and the database stay in the same region (lower latency, no
+   > cross-region transfer cost). No AWS access keys go in `.env` — the EC2
+   > instance uses the IAM role from step 3c.
 2. **Bucket → Permissions → CORS** → paste (lets the admin panel upload images):
    ```json
    [{"AllowedHeaders":["*"],"AllowedMethods":["PUT","GET"],

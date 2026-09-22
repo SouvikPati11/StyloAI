@@ -1,0 +1,63 @@
+# Fast feedback CI: static analysis + tests for mobile and backend.
+# Jobs are gated on the presence of each component's project files so the
+# workflow is green from Phase 0 (scaffold) and starts doing real work as the
+# Flutter app (Phase 3) and backend (Phase 1) land. See ../../docs/CICD.md.
+name: analyze_test
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  mobile:
+    name: Flutter analyze & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        name: Detect Flutter project
+        run: |
+          if [ -f mobile/pubspec.yaml ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "mobile/pubspec.yaml not present yet — skipping (Phase 3)."
+          fi
+      - if: steps.check.outputs.present == 'true'
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - if: steps.check.outputs.present == 'true'
+        working-directory: mobile
+        run: |
+          flutter pub get
+          dart format --set-exit-if-changed .
+          flutter analyze
+          flutter test
+
+  backend:
+    name: Backend lint & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        name: Detect backend project
+        run: |
+          if [ -f backend/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "backend/package.json not present yet — skipping (Phase 1)."
+          fi
+      - if: steps.check.outputs.present == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - if: steps.check.outputs.present == 'true'
+        working-directory: backend
+        run: |
+          npm ci
+          npm run lint --if-present
+          npm run typecheck --if-present
+          npm test --if-present

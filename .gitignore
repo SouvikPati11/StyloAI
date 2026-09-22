@@ -1,0 +1,53 @@
+# ---- Secrets (NEVER commit) ----
+*.env
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+*.keystore
+**/google-services.json
+**/GoogleService-Info.plist
+**/firebase-service-account*.json
+**/serviceAccount*.json
+**/key.properties
+secrets/
+*.secret
+
+# ---- Node / backend ----
+node_modules/
+dist/
+build/
+coverage/
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+.DS_Store
+
+# ---- Prisma ----
+backend/prisma/*.db
+
+# ---- Flutter / Dart ----
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/build/
+mobile/.pub-cache/
+mobile/.pub/
+mobile/ios/Pods/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/android/key.properties
+mobile/android/app/upload-keystore.jks
+mobile/**/*.g.dart.orig
+mobile/coverage/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.iml
+
+# ---- OS ----
+Thumbs.db

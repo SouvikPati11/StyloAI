@@ -4,6 +4,15 @@ Build a real, connected system in dependency order — backend and data first,
 then the app against real contracts. **No fake UI with backend "later."** Each
 phase is shippable/testable on its own.
 
+> **Status:** Phases 0–7 are implemented. The backend (API, credit ledger,
+> Gemini generation, billing verification, admin panel) and the Flutter app
+> (design system + all screens, wired to the backend) are complete and pass
+> their checks (`npm run lint/typecheck/test/build`; `flutter analyze/test`,
+> `dart format`). What remains before public launch is **external
+> configuration only** — Firebase, AWS/RDS/S3/Redis, the Gemini key, the Play
+> service account, a domain, and the release keystore — plus running the signed
+> AAB build in CI. See the repo README and each component README for exact steps.
+
 ---
 
 ## Phase 0 — Foundations  *(this PR)*

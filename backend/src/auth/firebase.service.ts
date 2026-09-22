@@ -62,4 +62,20 @@ export class FirebaseService implements OnModuleInit {
       throw AppException.unauthenticated('Invalid Firebase ID token.');
     }
   }
+
+  /** Send an FCM push to a single device token. No-op when not configured. */
+  async sendPush(
+    token: string,
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ): Promise<void> {
+    if (!this.app) return;
+    await this.app.messaging().send({
+      token,
+      notification: { title, body },
+      data,
+      android: { priority: 'high' },
+    });
+  }
 }

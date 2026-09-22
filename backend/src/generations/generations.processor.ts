@@ -7,6 +7,7 @@ import { StorageService } from '../storage/storage.service';
 import { CreditsService } from '../credits/credits.service';
 import { IMAGE_PROVIDER, ImageGenerationProvider, ProviderError, ImageData } from '../ai/types';
 import { buildPrompt } from '../ai/identity-preservation';
+import { NotificationsService } from '../engagement/notifications.service';
 import { GENERATION_QUEUE, GenerationJobData } from './generations.constants';
 
 /**
@@ -23,6 +24,7 @@ export class GenerationsProcessor extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly credits: CreditsService,
+    private readonly notifications: NotificationsService,
     @Inject(IMAGE_PROVIDER) private readonly provider: ImageGenerationProvider,
   ) {
     super();
@@ -106,7 +108,14 @@ export class GenerationsProcessor extends WorkerHost {
         },
       });
       this.logger.log(`Generation ${generation.id} succeeded.`);
-      // FCM "ready" notification is sent in Phase 7.
+      await this.notifications.notify({
+        userId: generation.userId,
+        type: 'generation_completed',
+        title: 'Your new look is ready',
+        body: `Your ${generation.type} look has been generated. Tap to view.`,
+        data: { generation_id: generation.id, type: generation.type },
+        respectPref: 'notifGeneration',
+      });
     } catch (err) {
       await this.handleFailure(generation.id, generation.userId, err, job);
     }
@@ -162,7 +171,17 @@ export class GenerationsProcessor extends WorkerHost {
         });
       }
     }
-    // FCM "failed" notification is sent in Phase 7. Do not rethrow: the failure
-    // is recorded and handled, so the job is complete.
+
+    await this.notifications.notify({
+      userId,
+      type: 'generation_failed',
+      title: "Your look couldn't be created",
+      body: refundEligible
+        ? 'We hit a problem generating your look and refunded your credits. Please try again.'
+        : 'We couldn’t create that look. Please try a different photo.',
+      data: { generation_id: generationId, error_code: code },
+      respectPref: 'notifGeneration',
+    });
+    // Do not rethrow: the failure is recorded and handled, so the job is complete.
   }
 }

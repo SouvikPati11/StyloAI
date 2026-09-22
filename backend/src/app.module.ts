@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 import { validateEnv } from './config/env.validation';
 import { PrismaModule } from './prisma/prisma.module';
 import { SettingsModule } from './settings/settings.module';
@@ -11,6 +13,11 @@ import { UsersModule } from './users/users.module';
 import { AdminModule } from './admin/admin.module';
 import { AiModule } from './ai/ai.module';
 import { GenerationsModule } from './generations/generations.module';
+import { BillingModule } from './billing/billing.module';
+import { ContentModule } from './content/content.module';
+import { LooksModule } from './looks/looks.module';
+import { ProfileModule } from './profile/profile.module';
+import { EngagementModule } from './engagement/engagement.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -18,6 +25,12 @@ import { HealthController } from './health/health.controller';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
+    }),
+    // Serves the admin panel SPA at /admin (static; talks to the /v1/admin API).
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+      serveRoot: '/admin',
+      serveStaticOptions: { index: 'index.html' },
     }),
     BullModule.forRootAsync({
       inject: [ConfigService],
@@ -42,7 +55,12 @@ import { HealthController } from './health/health.controller';
     UsersModule,
     AdminModule,
     AiModule,
+    EngagementModule,
     GenerationsModule,
+    BillingModule,
+    ContentModule,
+    LooksModule,
+    ProfileModule,
   ],
   controllers: [HealthController],
 })

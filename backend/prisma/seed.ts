@@ -48,6 +48,15 @@ const SETTINGS: { key: string; value: unknown; description: string }[] = [
     },
     description: 'Per-user rate limits for expensive endpoints.',
   },
+  {
+    key: 'store_products',
+    value: [
+      { product_id: 'credits_50', credits: 50, title: 'Starter', price_hint: '$4.99' },
+      { product_id: 'credits_120', credits: 120, title: 'Popular', price_hint: '$9.99', bonus: 10 },
+      { product_id: 'credits_300', credits: 300, title: 'Pro', price_hint: '$19.99', bonus: 40 },
+    ],
+    description: 'Credit packs shown in the store. Must match Google Play Console product IDs.',
+  },
 ];
 
 // section -> [ [key, label], ... ]

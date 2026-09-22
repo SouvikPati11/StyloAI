@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StyloAI Admin</title>
+<style>
+  :root {
+    --ink: #141414; --bg: #faf8f5; --surface: #ffffff; --muted: #6b6560;
+    --line: #e7e2db; --accent: #7c3a4b; --accent-soft: #f3e9ec;
+    --ok: #2f7d5b; --warn: #b0782a; --err: #b3402f; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--ink); background: var(--bg); font-size: 15px; line-height: 1.5; }
+  a { color: var(--accent); }
+  .hidden { display: none !important; }
+  /* Login */
+  #login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .login-card { width: 100%; max-width: 380px; }
+  .brand { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  .brand small { display:block; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 4px; }
+  label { display:block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+  input, select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line);
+    border-radius: 10px; font-size: 14px; background: #fff; font-family: inherit; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
+    padding: 11px 16px; background: var(--accent); color: #fff; font-family: inherit; }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  button.ghost { background: transparent; color: var(--muted); padding: 6px 10px; }
+  button.danger { background: #fbeae7; color: var(--err); }
+  button:active { transform: translateY(1px); }
+  .full { width: 100%; margin-top: 18px; }
+  .err { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  /* Shell */
+  header { display:flex; align-items:center; justify-content: space-between; padding: 14px 20px;
+    background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  nav { display:flex; gap: 4px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line);
+    overflow-x: auto; position: sticky; top: 57px; z-index: 4; }
+  nav button { background: transparent; color: var(--muted); font-weight: 600; padding: 8px 14px; border-radius: 999px; white-space: nowrap; }
+  nav button.active { background: var(--ink); color: #fff; }
+  main { max-width: 1000px; margin: 0 auto; padding: 22px 16px 80px; }
+  h2 { font-size: 20px; letter-spacing: -.01em; margin: 4px 0 16px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+  .stat .n { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #fbfaf8; }
+  tr:last-child td { border-bottom: none; }
+  .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
+  .row > div { flex: 1; min-width: 140px; }
+  .pill { display:inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: #e6f2ec; color: var(--ok); }
+  .pill.warn { background: #f6eddb; color: var(--warn); }
+  .pill.err { background: #fbeae7; color: var(--err); }
+  .muted { color: var(--muted); }
+  .thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; background: var(--line); }
+  .banner { background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
+  .flex { display:flex; gap: 8px; align-items: center; }
+  .spacer { flex: 1; }
+  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; z-index: 20; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login">
+    <div class="card login-card">
+      <div class="brand">StyloAI <small>Admin Console</small></div>
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" placeholder="admin@stylo.app" />
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+      <button class="full" onclick="login()">Sign in</button>
+      <div class="err" id="loginErr"></div>
+    </div>
+  </div>
+
+  <!-- SHELL -->
+  <div id="app" class="hidden">
+    <header>
+      <div class="brand">StyloAI <small>Admin</small></div>
+      <div class="flex"><span class="muted" id="whoami"></span><button class="ghost" onclick="logout()">Log out</button></div>
+    </header>
+    <nav id="nav"></nav>
+    <main id="view"></main>
+  </div>
+  <div class="toast" id="toast"></div>
+
+<script>
+const API = location.origin + '/v1';
+let TOKEN = localStorage.getItem('stylo_admin_token') || '';
+let ADMIN = JSON.parse(localStorage.getItem('stylo_admin') || 'null');
+const TABS = ['Dashboard','Content','Categories','Users','Settings'];
+let currentTab = 'Dashboard';
+
+function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+
+async function api(path, opts={}) {
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: { 'Content-Type':'application/json', ...(TOKEN?{Authorization:'Bearer '+TOKEN}:{}) , ...(opts.headers||{}) },
+  });
+  if (res.status === 401) { logout(); throw new Error('Session expired'); }
+  const body = await res.json().catch(()=>({}));
+  if (!res.ok) throw new Error(body?.error?.message || ('Request failed ('+res.status+')'));
+  return body;
+}
+
+async function login() {
+  const email = document.getElementById('email').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl = document.getElementById('loginErr'); errEl.textContent='';
+  try {
+    const r = await api('/admin/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
+    TOKEN = r.access_token; ADMIN = r.admin;
+    localStorage.setItem('stylo_admin_token', TOKEN);
+    localStorage.setItem('stylo_admin', JSON.stringify(ADMIN));
+    boot();
+  } catch(e) { errEl.textContent = e.message; }
+}
+function logout(){ TOKEN=''; ADMIN=null; localStorage.removeItem('stylo_admin_token'); localStorage.removeItem('stylo_admin');
+  document.getElementById('app').classList.add('hidden'); document.getElementById('login').classList.remove('hidden'); }
+
+function boot(){
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  document.getElementById('whoami').textContent = ADMIN ? ADMIN.email : '';
+  const nav = document.getElementById('nav'); nav.innerHTML='';
+  TABS.forEach(t=>{ const b=document.createElement('button'); b.textContent=t; b.className=(t===currentTab?'active':'');
+    b.onclick=()=>{currentTab=t; boot();}; nav.appendChild(b); });
+  render();
+}
+
+const view = () => document.getElementById('view');
+function esc(s){ return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function render(){
+  const v = view(); v.innerHTML = '<p class="muted">Loading…</p>';
+  try {
+    if (currentTab==='Dashboard') return renderDashboard(v);
+    if (currentTab==='Content') return renderContent(v);
+    if (currentTab==='Categories') return renderCategories(v);
+    if (currentTab==='Users') return renderUsers(v);
+    if (currentTab==='Settings') return renderSettings(v);
+  } catch(e){ v.innerHTML = '<div class="banner">'+esc(e.message)+'</div>'; }
+}
+
+async function renderDashboard(v){
+  const s = await api('/admin/stats');
+  const g = s.generations || {};
+  const byType = (s.generations_by_type||[]).map(x=>`<tr><td>${esc(x.type)}</td><td>${x.count}</td></tr>`).join('');
+  v.innerHTML = `<h2>Dashboard</h2>
+    <div class="grid">
+      <div class="stat"><div class="n">${s.users??0}</div><div class="l">Users</div></div>
+      <div class="stat"><div class="n">${g.total??0}</div><div class="l">Generations</div></div>
+      <div class="stat"><div class="n">${g.succeeded??0}</div><div class="l">Succeeded</div></div>
+      <div class="stat"><div class="n">${g.failed??0}</div><div class="l">Failed</div></div>
+      <div class="stat"><div class="n">${s.purchases_granted??0}</div><div class="l">Purchases</div></div>
+    </div>
+    <h2 style="margin-top:28px">Generations by type</h2>
+    <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>${byType||'<tr><td colspan=2 class=muted>No data yet</td></tr>'}</tbody></table>`;
+}
+
+async function renderContent(v){
+  const items = await api('/admin/trending');
+  const rows = items.map(i=>`<tr>
+    <td><img class="thumb" src="${esc(i.image_url)}" onerror="this.style.opacity=.3"/></td>
+    <td><strong>${esc(i.title)}</strong><br><span class="muted">${esc(i.subtitle||'')}</span></td>
+    <td>${esc(i.section)}</td><td>${esc(i.presetKey||'')}</td>
+    <td>${i.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
+    <td><button class="danger" onclick="delTrending('${i.id}')">Delete</button></td></tr>`).join('');
+  v.innerHTML = `<h2>Trending content</h2>
+    <div class="banner">Changes here appear in the app immediately — no release needed.</div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="row">
+        <div><label>Section</label><select id="c_section">${['outfit','hair','glasses','accessories','pose','ai_edit','inspiration'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+        <div><label>Title</label><input id="c_title"/></div>
+        <div><label>Subtitle</label><input id="c_subtitle"/></div>
+      </div>
+      <div class="row">
+        <div><label>Preset key (optional)</label><input id="c_preset" placeholder="streetwear"/></div>
+        <div><label>Image</label><input id="c_file" type="file" accept="image/*"/></div>
+        <div style="flex:0"><label>&nbsp;</label><button onclick="createTrending()">Add</button></div>
+      </div>
+      <div class="err" id="c_err"></div>
+    </div>
+    <table><thead><tr><th></th><th>Title</th><th>Section</th><th>Preset</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows||'<tr><td colspan=6 class=muted>No trending content yet</td></tr>'}</tbody></table>`;
+}
+
+async function uploadImage(file){
+  const p = await api('/admin/media/presign', { method:'POST', body: JSON.stringify({ content_type: file.type }) });
+  await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
+  return p.s3_key;
+}
+async function createTrending(){
+  const err = document.getElementById('c_err'); err.textContent='';
+  try {
+    const file = document.getElementById('c_file').files[0];
+    if(!file){ err.textContent='Please choose an image.'; return; }
+    const key = await uploadImage(file);
+    await api('/admin/trending', { method:'POST', body: JSON.stringify({
+      section: document.getElementById('c_section').value,
+      title: document.getElementById('c_title').value,
+      subtitle: document.getElementById('c_subtitle').value || undefined,
+      preset_key: document.getElementById('c_preset').value || undefined,
+      image_s3_key: key,
+    })});
+    toast('Added'); render();
+  } catch(e){ err.textContent = e.message; }
+}
+async function delTrending(id){ if(!confirm('Delete this item?'))return; await api('/admin/trending/'+id,{method:'DELETE'}); toast('Deleted'); render(); }
+
+async function renderCategories(v){
+  const items = await api('/admin/categories');
+  const rows = items.map(c=>`<tr><td>${esc(c.section)}</td><td>${esc(c.key)}</td><td>${esc(c.label)}</td>
+    <td>${c.isActive?'<span class="pill ok">active</span>':'<span class="pill err">off</span>'}</td>
+    <td><button class="danger" onclick="delCat('${c.id}')">Delete</button></td></tr>`).join('');
+  v.innerHTML = `<h2>Categories</h2>
+    <div class="card" style="margin-bottom:18px"><div class="row">
+      <div><label>Section</label><select id="cat_section">${['outfit','hair','glasses','accessories','pose','ai_edit'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div><label>Key</label><input id="cat_key" placeholder="streetwear"/></div>
+      <div><label>Label</label><input id="cat_label" placeholder="Streetwear"/></div>
+      <div style="flex:0"><label>&nbsp;</label><button onclick="createCat()">Add</button></div>
+    </div><div class="err" id="cat_err"></div></div>
+    <table><thead><tr><th>Section</th><th>Key</th><th>Label</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+async function createCat(){ const err=document.getElementById('cat_err'); err.textContent='';
+  try{ await api('/admin/categories',{method:'POST',body:JSON.stringify({
+    section:document.getElementById('cat_section').value, key:document.getElementById('cat_key').value, label:document.getElementById('cat_label').value })});
+    toast('Saved'); render(); }catch(e){ err.textContent=e.message; } }
+async function delCat(id){ if(!confirm('Delete category?'))return; await api('/admin/categories/'+id,{method:'DELETE'}); toast('Deleted'); render(); }
+
+async function renderUsers(v){
+  v.innerHTML = `<h2>Users</h2>
+    <div class="row"><div><label>Search by email or name</label><input id="u_q" onkeydown="if(event.key==='Enter')searchUsers()"/></div>
+    <div style="flex:0"><label>&nbsp;</label><button onclick="searchUsers()">Search</button></div></div>
+    <div id="u_results"><p class="muted">Enter a query to search users.</p></div>`;
+}
+async function searchUsers(){
+  const q = document.getElementById('u_q').value.trim();
+  const el = document.getElementById('u_results'); el.innerHTML='<p class="muted">Searching…</p>';
+  const rows = await api('/admin/users?q='+encodeURIComponent(q));
+  el.innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>${
+    rows.map(u=>`<tr><td>${esc(u.email||'')}</td><td>${esc(u.display_name||'')}</td><td>${u.balance}</td>
+      <td>${esc(u.status)}</td><td><button class="secondary" onclick="viewUser('${u.id}')">Open</button></td></tr>`).join('') || '<tr><td colspan=5 class=muted>No users found</td></tr>'}</tbody></table>`;
+}
+async function viewUser(id){
+  const el = document.getElementById('u_results'); el.innerHTML='<p class="muted">Loading…</p>';
+  const u = await api('/admin/users/'+id);
+  const txns = u.transactions.map(t=>`<tr><td>${t.amount>0?'+':''}${t.amount}</td><td>${esc(t.type)}</td><td>${esc(t.status)}</td><td class="muted">${esc(t.note||'')}</td></tr>`).join('');
+  const gens = u.generations.map(g=>`<tr><td>${esc(g.type)}</td><td>${esc(g.status)}</td><td>${g.credit_cost}</td></tr>`).join('');
+  el.innerHTML = `<button class="ghost" onclick="searchUsers()">&larr; Back</button>
+    <div class="card" style="margin:12px 0"><div class="flex"><div><strong>${esc(u.display_name||'—')}</strong><br><span class="muted">${esc(u.email||'')}</span></div>
+    <div class="spacer"></div><div style="text-align:right"><div class="stat" style="padding:10px 14px"><div class="n">${u.balance}</div><div class="l">Credits</div></div></div></div>
+    <div class="row" style="margin-top:14px"><div><label>Grant credits</label><input id="g_amt" type="number" min="1" placeholder="50"/></div>
+    <div><label>Reason</label><input id="g_note" placeholder="Promo"/></div>
+    <div style="flex:0"><label>&nbsp;</label><button onclick="grant('${id}')">Grant</button></div></div><div class="err" id="g_err"></div></div>
+    <h2>Transactions</h2><table><thead><tr><th>Amount</th><th>Type</th><th>Status</th><th>Note</th></tr></thead><tbody>${txns||'<tr><td colspan=4 class=muted>None</td></tr>'}</tbody></table>
+    <h2 style="margin-top:22px">Recent generations</h2><table><thead><tr><th>Type</th><th>Status</th><th>Cost</th></tr></thead><tbody>${gens||'<tr><td colspan=3 class=muted>None</td></tr>'}</tbody></table>`;
+}
+async function grant(id){ const err=document.getElementById('g_err'); err.textContent='';
+  try{ const amount=parseInt(document.getElementById('g_amt').value,10); const note=document.getElementById('g_note').value;
+    const r=await api('/admin/users/'+id+'/credits',{method:'POST',body:JSON.stringify({amount,note})});
+    toast('Granted. New balance: '+r.balance); viewUser(id); }catch(e){ err.textContent=e.message; } }
+
+async function renderSettings(v){
+  const rows = await api('/admin/settings');
+  v.innerHTML = `<h2>System settings</h2>
+    <div class="banner">Credit costs and feature flags are read by the app from <code>/config</code>. Edits apply immediately.</div>
+    ${rows.map(s=>`<div class="card" style="margin-bottom:14px">
+      <div class="flex"><strong>${esc(s.key)}</strong><div class="spacer"></div><button class="secondary" onclick="saveSetting('${s.key}')">Save</button></div>
+      <p class="muted" style="margin:6px 0">${esc(s.description||'')}</p>
+      <textarea id="set_${s.key}" rows="5" style="font-family:ui-monospace,monospace;font-size:13px">${esc(JSON.stringify(s.value,null,2))}</textarea>
+      <div class="err" id="err_${s.key}"></div></div>`).join('')}`;
+}
+async function saveSetting(key){ const err=document.getElementById('err_'+key); err.textContent='';
+  try{ const value=JSON.parse(document.getElementById('set_'+key).value);
+    await api('/admin/settings/'+encodeURIComponent(key),{method:'PUT',body:JSON.stringify({value})}); toast('Saved '+key);
+  }catch(e){ err.textContent = e.message.includes('JSON')?'Invalid JSON':e.message; } }
+
+// Auto-login if a token is present.
+if (TOKEN) { api('/admin/stats').then(boot).catch(()=>logout()); }
+document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
+</script>
+</body>
+</html>

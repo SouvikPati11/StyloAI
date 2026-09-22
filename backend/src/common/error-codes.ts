@@ -1,0 +1,20 @@
+/**
+ * Typed error codes returned in the API error envelope. The Flutter app maps
+ * each code directly to a UI state (see docs/API_CONTRACTS.md §Conventions and
+ * docs/FLUTTER_APP.md §3). Keep this list in sync with the app's error mapping.
+ */
+export enum ErrorCode {
+  UNAUTHENTICATED = 'UNAUTHENTICATED',
+  TOKEN_EXPIRED = 'TOKEN_EXPIRED',
+  FORBIDDEN = 'FORBIDDEN',
+  VALIDATION_ERROR = 'VALIDATION_ERROR',
+  NOT_FOUND = 'NOT_FOUND',
+  RATE_LIMITED = 'RATE_LIMITED',
+  INSUFFICIENT_CREDITS = 'INSUFFICIENT_CREDITS',
+  GENERATION_FAILED = 'GENERATION_FAILED',
+  FEATURE_DISABLED = 'FEATURE_DISABLED',
+  PAYMENT_INVALID = 'PAYMENT_INVALID',
+  PURCHASE_ALREADY_CLAIMED = 'PURCHASE_ALREADY_CLAIMED',
+  CONFLICT = 'CONFLICT',
+  INTERNAL = 'INTERNAL',
+}

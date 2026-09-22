@@ -1,0 +1,421 @@
+// StyloAI database schema — see docs/DATABASE_SCHEMA.md for the narrative.
+// No image bytes live here: only S3 keys + metadata. Credits use an
+// append-only ledger (CreditTransaction); CreditWallet.balance is a cached
+// projection updated only inside the same transaction that appends a ledger row.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum UserStatus {
+  active
+  suspended
+  deleted
+}
+
+enum StyleProfileSource {
+  user
+  ai
+}
+
+enum GenerationType {
+  outfit
+  hair
+  glasses
+  accessories
+  pose
+  ai_edit
+}
+
+enum GenerationMode {
+  explore
+  reference_upload
+}
+
+enum GenerationStatus {
+  queued
+  processing
+  succeeded
+  failed
+  refunded
+}
+
+enum CreditTxnType {
+  signup_bonus
+  admin_grant
+  purchase
+  generation_hold
+  generation_settle
+  generation_refund
+  promo
+}
+
+enum CreditTxnStatus {
+  pending
+  committed
+  reversed
+}
+
+enum PurchaseState {
+  pending
+  verified
+  granted
+  refunded
+  invalid
+}
+
+enum GenerationInputRole {
+  user_photo
+  outfit_ref
+  hair_ref
+  glasses_ref
+  accessory_ref
+  pose_ref
+}
+
+enum ContentSection {
+  outfit
+  hair
+  glasses
+  accessories
+  pose
+  ai_edit
+  inspiration
+}
+
+enum AdminRole {
+  super_admin
+  admin
+  content_editor
+}
+
+// ---------------------------------------------------------------------------
+// Users & profiles
+// ---------------------------------------------------------------------------
+
+model User {
+  id          String     @id @default(uuid()) @db.Uuid
+  firebaseUid String     @unique @map("firebase_uid")
+  email       String?    @unique
+  displayName String?    @map("display_name")
+  avatarUrl   String?    @map("avatar_url")
+  status      UserStatus @default(active)
+  createdAt   DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  profile      UserProfile?
+  styleProfile StyleProfile?
+  wallet       CreditWallet?
+  transactions CreditTransaction[]
+  purchases    Purchase[]
+  generations  Generation[]
+  images       GeneratedImage[]
+  savedLooks   SavedLook[]
+  devices      Device[]
+  notifications Notification[]
+
+  @@index([firebaseUid])
+  @@index([email])
+  @@map("users")
+}
+
+model UserProfile {
+  id                   String   @id @default(uuid()) @db.Uuid
+  userId               String   @unique @map("user_id") @db.Uuid
+  locale               String?  @default("en")
+  notifGeneration      Boolean  @default(true) @map("notif_generation")
+  notifTrending        Boolean  @default(true) @map("notif_trending")
+  notifMarketing       Boolean  @default(false) @map("notif_marketing")
+  onboardingCompleted  Boolean  @default(false) @map("onboarding_completed")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+model StyleProfile {
+  id                  String             @id @default(uuid()) @db.Uuid
+  userId              String             @unique @map("user_id") @db.Uuid
+  preferredStyles     String[]           @map("preferred_styles")
+  favoriteColors      String[]           @map("favorite_colors")
+  styleInterests      String[]           @map("style_interests")
+  hairPreferences     String[]           @map("hair_preferences")
+  glassesPreferences  String[]           @map("glasses_preferences")
+  occasionPreferences String[]           @map("occasion_preferences")
+  source              StyleProfileSource @default(user)
+  aiSummary           String?            @map("ai_summary")
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("style_profiles")
+}
+
+// ---------------------------------------------------------------------------
+// Credits
+// ---------------------------------------------------------------------------
+
+model CreditWallet {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @map("user_id") @db.Uuid
+  balance        Int      @default(0)
+  lifetimeEarned Int      @default(0) @map("lifetime_earned")
+  lifetimeSpent  Int      @default(0) @map("lifetime_spent")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@map("credit_wallets")
+}
+
+model CreditTransaction {
+  id             String          @id @default(uuid()) @db.Uuid
+  walletId       String          @map("wallet_id") @db.Uuid
+  userId         String          @map("user_id") @db.Uuid
+  amount         Int // signed: negative = spend/hold, positive = grant/refund
+  balanceAfter   Int             @map("balance_after")
+  type           CreditTxnType
+  status         CreditTxnStatus @default(committed)
+  generationId   String?         @map("generation_id") @db.Uuid
+  purchaseId     String?         @map("purchase_id") @db.Uuid
+  idempotencyKey String?         @unique @map("idempotency_key")
+  note           String?
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  wallet     CreditWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  generation Generation?  @relation(fields: [generationId], references: [id])
+  purchase   Purchase?    @relation(fields: [purchaseId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([generationId])
+  @@map("credit_transactions")
+}
+
+model Purchase {
+  id              String        @id @default(uuid()) @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  productId       String        @map("product_id")
+  purchaseToken   String        @unique @map("purchase_token")
+  orderId         String?       @map("order_id")
+  platform        String        @default("google_play")
+  creditsGranted  Int           @default(0) @map("credits_granted")
+  amountMicros    BigInt?       @map("amount_micros")
+  currency        String?
+  state           PurchaseState @default(pending)
+  verifiedAt      DateTime?     @map("verified_at") @db.Timestamptz(6)
+  rawVerification Json?         @map("raw_verification")
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+
+  @@index([userId, createdAt])
+  @@map("purchases")
+}
+
+// ---------------------------------------------------------------------------
+// Generations
+// ---------------------------------------------------------------------------
+
+model Generation {
+  id             String           @id @default(uuid()) @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  type           GenerationType
+  mode           GenerationMode
+  presetKey      String?          @map("preset_key")
+  status         GenerationStatus @default(queued)
+  creditCost     Int              @map("credit_cost")
+  provider       String           @default("gemini")
+  providerJobRef String?          @map("provider_job_ref")
+  idempotencyKey String           @unique @map("idempotency_key")
+  errorCode      String?          @map("error_code")
+  params         Json?
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  startedAt      DateTime?        @map("started_at") @db.Timestamptz(6)
+  finishedAt     DateTime?        @map("finished_at") @db.Timestamptz(6)
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  inputs       GenerationInput[]
+  images       GeneratedImage[]
+  transactions CreditTransaction[]
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@map("generations")
+}
+
+model GenerationInput {
+  id           String              @id @default(uuid()) @db.Uuid
+  generationId String              @map("generation_id") @db.Uuid
+  role         GenerationInputRole
+  s3Key        String              @map("s3_key")
+  width        Int?
+  height       Int?
+  contentType  String?             @map("content_type")
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)
+
+  @@index([generationId])
+  @@map("generation_inputs")
+}
+
+model GeneratedImage {
+  id              String    @id @default(uuid()) @db.Uuid
+  generationId    String    @map("generation_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  s3Key           String    @map("s3_key")
+  thumbnailS3Key  String?   @map("thumbnail_s3_key")
+  width           Int?
+  height          Int?
+  contentType     String?   @map("content_type")
+  isPrimary       Boolean   @default(true) @map("is_primary")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  generation Generation  @relation(fields: [generationId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  savedLooks SavedLook[]
+
+  @@index([userId, createdAt])
+  @@map("generated_images")
+}
+
+model SavedLook {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  generatedImageId String    @map("generated_image_id") @db.Uuid
+  title            String?
+  collection       String?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  image GeneratedImage @relation(fields: [generatedImageId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, generatedImageId])
+  @@map("saved_looks")
+}
+
+// ---------------------------------------------------------------------------
+// Content (admin-managed, drives Explore/Trending)
+// ---------------------------------------------------------------------------
+
+model Category {
+  id        String         @id @default(uuid()) @db.Uuid
+  section   ContentSection
+  key       String
+  label     String
+  sortOrder Int            @default(0) @map("sort_order")
+  isActive  Boolean        @default(true) @map("is_active")
+  createdAt DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  trending TrendingContent[]
+
+  @@unique([section, key])
+  @@map("categories")
+}
+
+model TrendingContent {
+  id         String         @id @default(uuid()) @db.Uuid
+  section    ContentSection
+  categoryId String?        @map("category_id") @db.Uuid
+  title      String
+  subtitle   String?
+  imageS3Key String         @map("image_s3_key")
+  presetKey  String?        @map("preset_key")
+  position   Int            @default(0)
+  isActive   Boolean        @default(true) @map("is_active")
+  startsAt   DateTime?      @map("starts_at") @db.Timestamptz(6)
+  endsAt     DateTime?      @map("ends_at") @db.Timestamptz(6)
+  createdBy  String?        @map("created_by") @db.Uuid
+  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category Category?  @relation(fields: [categoryId], references: [id])
+  author   AdminUser? @relation(fields: [createdBy], references: [id])
+
+  @@index([section, isActive, position])
+  @@map("trending_content")
+}
+
+// ---------------------------------------------------------------------------
+// Devices & notifications
+// ---------------------------------------------------------------------------
+
+model Device {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  fcmToken   String   @unique @map("fcm_token")
+  platform   String   @default("android")
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("devices")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// ---------------------------------------------------------------------------
+// Admin & settings
+// ---------------------------------------------------------------------------
+
+model AdminUser {
+  id           String    @id @default(uuid()) @db.Uuid
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(admin)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  trending TrendingContent[]
+
+  @@map("admin_users")
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json
+  description String?
+  updatedBy   String?  @map("updated_by") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("system_settings")
+}

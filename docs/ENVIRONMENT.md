@@ -6,6 +6,36 @@ doc is the checklist; `.env.example` files (committed, no real values) mirror it
 
 ---
 
+## Where to put a backend secret on the production server
+
+All backend secrets (including the Gemini API key) go in **one** place: the
+`.env` file next to the running backend on your EC2 box — **not** in source code,
+the app, the admin panel, or GitHub.
+
+1. SSH to the server and open the backend env file (created in setup):
+   ```bash
+   cd ~/StyloAI/backend
+   nano .env
+   ```
+2. Set the Gemini values (the key stays only in this file):
+   ```env
+   GEMINI_API_KEY=your-key-here
+   GEMINI_MODEL=gemini-2.0-flash-preview-image-generation
+   ```
+3. Save, then reload the service so it picks up the new value:
+   ```bash
+   pm2 restart stylo-api
+   ```
+The backend reads these with `ConfigService` in `src/ai/gemini.provider.ts`; the
+key is sent only in the outbound HTTPS call to Google and is never logged,
+returned in an API response, or exposed to Flutter or the admin panel. `.env` is
+git-ignored, so it can never be committed.
+
+> Prefer AWS SSM Parameter Store (SecureString) over a plain `.env` in a mature
+> setup — inject the values at boot; the code is unchanged.
+
+---
+
 ## Backend (`backend/.env` — from SSM in prod)
 
 | Variable | Secret? | Description |

@@ -59,12 +59,22 @@ Credit product IDs used everywhere: **`credits_50`, `credits_120`, `credits_300`
 1. Open **aistudio.google.com** → **Get API key** → **Create API key** (choose or
    create a Google Cloud project). Image generation needs billing enabled on that
    Cloud project.
-2. The key → backend `.env` as **`GEMINI_API_KEY`** (server only — it must never
-   be in the app).
-3. Set **`GEMINI_MODEL`** in `.env` to the current image-capable Gemini model
-   (e.g. `gemini-2.0-flash-preview-image-generation`). If a generation later
-   returns "no image", switch this to whatever image-output Gemini model your key
-   has access to — it's the one value to adjust, nothing else changes.
+2. The key → backend **`.env`** as **`GEMINI_API_KEY`** (server only — it must
+   never be in the app, admin panel, logs, or GitHub). **Exact place on the
+   production server:** the file **`~/StyloAI/backend/.env`** on your EC2 box.
+   SSH in (Termius) and:
+   ```bash
+   cd ~/StyloAI/backend
+   nano .env          # set GEMINI_API_KEY=... and GEMINI_MODEL=...
+   pm2 restart stylo-api
+   ```
+   `.env` is git-ignored, so the key is never committed. The backend reads it via
+   `ConfigService` in `src/ai/gemini.provider.ts` and sends it only in the
+   outbound HTTPS call to Google.
+3. Set **`GEMINI_MODEL`** in the same `.env` to the current image-capable Gemini
+   model (e.g. `gemini-2.0-flash-preview-image-generation`). If a generation
+   later returns "no image", switch this to whatever image-output Gemini model
+   your key has access to — it's the one value to adjust, nothing else changes.
 
 ---
 

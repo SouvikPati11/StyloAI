@@ -1,6 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
 
@@ -81,5 +86,34 @@ export class StorageService {
   async presignDownload(key: string, ttlSeconds = 300): Promise<string> {
     const command = new GetObjectCommand({ Bucket: this.bucket, Key: key });
     return getSignedUrl(this.client, command, { expiresIn: ttlSeconds });
+  }
+
+  /** Fetch object bytes (worker: read generation inputs to send to the provider). */
+  async getObjectBytes(key: string): Promise<{ bytes: Buffer; contentType: string }> {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    const bytes = Buffer.from(await res.Body!.transformToByteArray());
+    return { bytes, contentType: res.ContentType ?? 'image/jpeg' };
+  }
+
+  /** Store an object (worker: write the generated image). Returns the key. */
+  async putObject(key: string, bytes: Buffer, contentType: string): Promise<string> {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: bytes,
+        ContentType: contentType,
+      }),
+    );
+    return key;
+  }
+
+  /** Key under generated/{userId}/ for an output image. */
+  buildGeneratedKey(userId: string, contentType: string): string {
+    return `generated/${userId}/${randomUUID()}.${this.extFor(contentType)}`;
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 }

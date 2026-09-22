@@ -18,6 +18,13 @@ settings, and secure credit grants. Generation orchestration (Gemini) is
 Verified green in CI: `npm run lint`, `npm run typecheck`, `npm test`
 (credit-ledger invariants), `npm run build`.
 
+**Phase 2 (generation pipeline) implemented** — the core feature works
+end-to-end: a provider-abstracted Gemini integration, the central
+identity-preservation prompt module, an async BullMQ worker, and
+`POST /generations` → hold credits → Gemini → store to S3 → settle, with
+automatic refund + typed `error_code` on eligible failures and bounded retries.
+Requires Redis (BullMQ). Identity-preservation invariants are unit-tested.
+
 ### Implemented endpoints (v1)
 ```
 GET  /v1/health
@@ -27,9 +34,18 @@ DELETE /v1/account
 GET  /v1/me               PATCH /v1/me
 GET  /v1/wallet           GET /v1/wallet/transactions
 POST /v1/uploads/presign
+POST /v1/generations      GET /v1/generations[/:id]   DELETE /v1/generations/:id
 POST /v1/admin/auth/login
 GET  /v1/admin/stats      GET/PUT /v1/admin/settings[/:key]
 POST /v1/admin/users/:id/credits
+```
+
+### Running locally (Phase 2 needs Redis)
+```bash
+docker run -p 5432:5432 -e POSTGRES_PASSWORD=stylo -e POSTGRES_USER=stylo -e POSTGRES_DB=stylo postgres:16
+docker run -p 6379:6379 redis:7
+cp .env.example .env   # set DATABASE_URL, REDIS_URL, GEMINI_API_KEY, S3/AWS
+npx prisma migrate deploy && npm run seed && npm run start:dev
 ```
 
 ## Planned stack

@@ -82,12 +82,16 @@ jobs:
 
           cat > deploy-command.sh <<'EOF'
           set -euo pipefail
+          # The SSM shell has no HOME/USER; git (and other tools) need them.
+          export HOME=/home/ec2-user
+          export USER=ec2-user
           REGION=ap-south-1
           PARAM_PATH=/styloai/prod
           APP_DIR=/home/ec2-user/StyloAI/backend
 
-          git config --global --add safe.directory /home/ec2-user/StyloAI
+          # Run all deployment commands from the backend dir as the ec2-user home.
           cd "$APP_DIR"
+          git config --global --add safe.directory /home/ec2-user/StyloAI
           git fetch origin claude/happy-cori-w42sa5
           git checkout claude/happy-cori-w42sa5
           git reset --hard origin/claude/happy-cori-w42sa5

@@ -1,0 +1,18 @@
+[Unit]
+Description=StyloAI backend API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/StyloAI/backend
+# Secrets/config are provided by the deployment-generated .env (chmod 600).
+EnvironmentFile=/home/ec2-user/StyloAI/backend/.env
+# Production entry point is the actual Nest build output: dist/src/main.js
+ExecStart=/usr/bin/env node /home/ec2-user/StyloAI/backend/dist/src/main.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

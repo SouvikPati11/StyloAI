@@ -19,11 +19,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # OIDC: GitHub mints a short-lived token; AWS STS exchanges it for role
+      # credentials IF the role's trust policy matches this token's claims.
+      # For this workflow the token's `sub` claim is:
+      #   repo:SouvikPati11/StyloAI:ref:refs/heads/claude/happy-cori-w42sa5
+      # and its `aud` claim is `sts.amazonaws.com` (set explicitly below).
+      # The IAM role StyloAI-GitHub-Deploy trust policy must allow that exact
+      # sub (or repo:SouvikPati11/StyloAI:*) and that aud, on the provider
+      # token.actions.githubusercontent.com. A mismatch is what produces
+      # "Not authorized to perform sts:AssumeRoleWithWebIdentity".
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
+          audience: sts.amazonaws.com
 
       - name: Deploy through SSM
         env:

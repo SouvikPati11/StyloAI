@@ -25,8 +25,13 @@ async function bootstrap() {
   });
 
   const port = config.get<number>('PORT') ?? 3000;
-  await app.listen(port);
-  Logger.log(`StyloAI backend listening on :${port}`, 'Bootstrap');
+  // Bind to a specific host. In production the app sits behind the Nginx TLS
+  // reverse proxy, so it listens on 127.0.0.1 only (never publicly on :3000);
+  // BIND_ADDRESS is set to 127.0.0.1 by the deployment. Defaults to 0.0.0.0 for
+  // local development where no proxy is present.
+  const host = config.get<string>('BIND_ADDRESS') ?? '0.0.0.0';
+  await app.listen(port, host);
+  Logger.log(`StyloAI backend listening on ${host}:${port}`, 'Bootstrap');
 }
 
 bootstrap();

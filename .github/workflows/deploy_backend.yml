@@ -131,8 +131,12 @@ jobs:
           cat > .env <<ENVFILE
           NODE_ENV=production
           PORT=3000
-          API_BASE_URL=http://13.235.73.14:3000
-          ADMIN_BASE_URL=http://13.235.73.14:3000/admin
+          # Bind to loopback only: the app is reached exclusively through the
+          # Nginx TLS reverse proxy on 127.0.0.1:3000, never publicly on :3000.
+          BIND_ADDRESS=127.0.0.1
+          # The public API is the permanent HTTPS domain, not the EC2 IP.
+          API_BASE_URL=https://api.souvikpati.in
+          ADMIN_BASE_URL=https://api.souvikpati.in/admin
 
           DATABASE_URL=postgresql://styloai_admin:${RDS_PASSWORD_VAL}@${RDS_HOST_VAL}:5432/styloai?sslmode=require
           REDIS_URL=${REDIS_URL_VAL}
@@ -222,33 +226,102 @@ jobs:
           fi
           echo "styloai-backend is active and healthy on 127.0.0.1:3000."
 
-          # ================= READ-ONLY infra inspection ======================
-          # Reports the current production state so the Nginx/TLS reverse proxy
-          # for https://api.souvikpati.in can be provisioned WITHOUT overwriting
-          # other sites/services. Changes nothing. Non-secret output only.
-          echo "===== [inspect] production infra (read-only) ====="
-          (grep -E '^(NAME|VERSION)=' /etc/os-release 2>/dev/null | sed 's/^/[inspect] os /') || true
-          printf '[inspect] pkg-mgr:'; for p in dnf yum apt-get; do command -v "$p" >/dev/null 2>&1 && printf ' %s' "$p"; done; echo
-          IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
-            -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
-          PUBIP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
-            http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
-          echo "[inspect] instance public IPv4: ${PUBIP:-unknown}"
-          echo "[inspect] DNS api.souvikpati.in ->"; (getent hosts api.souvikpati.in | sed 's/^/[inspect]   /') || echo "[inspect]   (no resolution)"
-          if command -v nginx >/dev/null 2>&1; then nginx -v 2>&1 | sed 's/^/[inspect] nginx /'; else echo "[inspect] nginx: NOT installed"; fi
-          echo "[inspect] nginx active: $(systemctl is-active nginx 2>/dev/null || echo none)"
-          echo "[inspect] nginx server_name directives (existing sites to preserve):"
-          (grep -rhE '^[[:space:]]*server_name' /etc/nginx 2>/dev/null | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
-          echo "[inspect] /etc/nginx/conf.d:"; (ls -1 /etc/nginx/conf.d 2>/dev/null | sed 's/^/[inspect]   /') || true
-          echo "[inspect] /etc/nginx/sites-enabled:"; (ls -1 /etc/nginx/sites-enabled 2>/dev/null | sed 's/^/[inspect]   /') || true
-          echo "[inspect] certbot: $(command -v certbot >/dev/null 2>&1 && echo present || echo absent)"
-          echo "[inspect] letsencrypt live certs:"; (ls -1 /etc/letsencrypt/live 2>/dev/null | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
-          echo "[inspect] listening 80/443/3000:"; (ss -lntp 2>/dev/null | grep -E ':80 |:443 |:3000 ' | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
-          echo "[inspect] ufw: $(command -v ufw >/dev/null 2>&1 && (ufw status 2>/dev/null | head -1) || echo 'not installed')"
-          echo "[inspect] firewalld: $(systemctl is-active firewalld 2>/dev/null || echo none)"
-          echo "===== [inspect] end ====="
+          # ============ Nginx TLS reverse proxy for api.souvikpati.in ========
+          # Permanent edge: https://api.souvikpati.in -> 127.0.0.1:3000 (NestJS).
+          # DNS already resolves to this instance and a Let's Encrypt certificate
+          # already exists; the earlier fault was that nginx was not running.
+          # Write a known-good config for OUR domain only (this box hosts no other
+          # user sites), validate it, and start nginx. Idempotent.
+          DOMAIN=api.souvikpati.in
+          CERT_DIR=/etc/letsencrypt/live/$DOMAIN
+          echo "[nginx] before: active=$(systemctl is-active nginx 2>/dev/null || echo none) cert=$([ -f "$CERT_DIR/fullchain.pem" ] && echo present || echo absent)"
+          mkdir -p /var/www/certbot
 
-          echo "Deployment succeeded; styloai-backend is active and healthy."
+          # Obtain a certificate only if one does not already exist (avoid LE
+          # rate limits). Needs public :80 + DNS, both already in place.
+          if [ ! -f "$CERT_DIR/fullchain.pem" ]; then
+            echo "[nginx] no certificate — requesting via certbot webroot…"
+            printf '%s\n' 'server {' 'listen 80;' 'server_name api.souvikpati.in;' 'location /.well-known/acme-challenge/ { root /var/www/certbot; }' 'location / { return 404; }' '}' > /etc/nginx/conf.d/styloai-api.conf
+            nginx -t && { systemctl enable --now nginx; systemctl reload nginx; } || true
+            timeout 150 certbot certonly --webroot -w /var/www/certbot -d "$DOMAIN" \
+              --non-interactive --agree-tos --register-unsafely-without-email \
+              || echo "::warning::certbot issuance failed — check DNS->this host and Security Group port 80."
+          fi
+
+          echo "[nginx] writing permanent reverse-proxy config…"
+          cat > /etc/nginx/conf.d/styloai-api.conf <<'NGINX'
+          server {
+          listen 80;
+          listen [::]:80;
+          server_name api.souvikpati.in;
+          location /.well-known/acme-challenge/ { root /var/www/certbot; }
+          location / { return 301 https://$host$request_uri; }
+          }
+          server {
+          listen 443 ssl;
+          listen [::]:443 ssl;
+          http2 on;
+          server_name api.souvikpati.in;
+          ssl_certificate     /etc/letsencrypt/live/api.souvikpati.in/fullchain.pem;
+          ssl_certificate_key /etc/letsencrypt/live/api.souvikpati.in/privkey.pem;
+          ssl_protocols TLSv1.2 TLSv1.3;
+          ssl_prefer_server_ciphers on;
+          client_max_body_size 25m;
+          location / {
+          proxy_pass http://127.0.0.1:3000;
+          proxy_http_version 1.1;
+          proxy_set_header Host              $host;
+          proxy_set_header X-Real-IP         $remote_addr;
+          proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_read_timeout 90s;
+          }
+          }
+          NGINX
+
+          echo "[nginx] validating config…"
+          if ! nginx -t; then
+            echo "::error::nginx -t failed"; sed 's/^/[nginx.conf] /' /etc/nginx/conf.d/styloai-api.conf
+            journalctl -u nginx -n 30 --no-pager || true
+            exit 1
+          fi
+          systemctl enable --now nginx
+          systemctl reload nginx || systemctl restart nginx
+          sleep 2
+          if ! systemctl is-active --quiet nginx; then
+            echo "::error::nginx not active after start"; journalctl -u nginx -n 40 --no-pager || true
+            exit 1
+          fi
+          echo "[nginx] active. listening:"; ss -lntp 2>/dev/null | grep -E ':80 |:443 |:3000 ' || true
+
+          # Ensure automatic renewal (create a systemd timer if none exists).
+          if ! systemctl is-enabled --quiet certbot-renew.timer 2>/dev/null \
+             && ! systemctl is-enabled --quiet certbot.timer 2>/dev/null \
+             && ! systemctl is-enabled --quiet styloai-certbot-renew.timer 2>/dev/null; then
+            echo "[nginx] installing certbot auto-renew systemd timer…"
+            CB=$(command -v certbot || echo /usr/bin/certbot)
+            printf '%s\n' '[Unit]' 'Description=StyloAI certbot renewal' '[Service]' 'Type=oneshot' "ExecStart=$CB renew --quiet --deploy-hook \"systemctl reload nginx\"" > /etc/systemd/system/styloai-certbot-renew.service
+            printf '%s\n' '[Unit]' 'Description=StyloAI certbot renewal (twice daily)' '[Timer]' 'OnCalendar=*-*-* 03,15:00:00' 'RandomizedDelaySec=1h' 'Persistent=true' '[Install]' 'WantedBy=timers.target' > /etc/systemd/system/styloai-certbot-renew.timer
+            systemctl daemon-reload
+            systemctl enable --now styloai-certbot-renew.timer
+          fi
+          echo "[verify] renew timer: $(systemctl is-enabled certbot-renew.timer 2>/dev/null || systemctl is-enabled styloai-certbot-renew.timer 2>/dev/null || echo none)"
+
+          # Verify TLS + proxy locally (cert CN + SNI via --resolve to loopback).
+          echo "[verify] local TLS https://$DOMAIN/v1/health …"
+          VCODE=$(curl -s -o /tmp/vh.out -w '%{http_code}' --max-time 12 \
+            --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/v1/health" || echo 000)
+          echo "[verify] local https code=$VCODE body=$(cat /tmp/vh.out 2>/dev/null || true)"
+          if [ "$VCODE" != "200" ]; then
+            echo "::error::Nginx->NestJS TLS proxy did not return 200 locally"; exit 1
+          fi
+          if timeout 150 certbot renew --dry-run >/tmp/renew.out 2>&1; then
+            echo "[verify] certbot renew --dry-run: OK"
+          else
+            echo "::warning::certbot renew --dry-run failed:"; tail -4 /tmp/renew.out 2>/dev/null || true
+          fi
+
+          echo "Deployment succeeded; API is live behind Nginx TLS at https://$DOMAIN."
           EOF
 
           # Do not stack deployments: cancel any StyloAI deployment command still
@@ -324,3 +397,50 @@ jobs:
             exit 1
           fi
           echo "Backend deployment completed successfully."
+
+      # Permanent public edge is 443 (Nginx/TLS); 3000 must not be public. Ensure
+      # the instance's Security Group allows 80/443 and drop any public 3000 rule.
+      # Best-effort: needs ec2 permissions on the deploy role; never fails the job
+      # (the external HTTPS check below is the real gate).
+      - name: Ensure Security Group allows 80/443 (best-effort)
+        env:
+          AWS_REGION: ap-south-1
+          INSTANCE_ID: i-03d7204a2d92df8ac
+        run: |
+          set +e
+          SGS=$(aws ec2 describe-instances --region "$AWS_REGION" --instance-ids "$INSTANCE_ID" \
+            --query 'Reservations[].Instances[].SecurityGroups[].GroupId' --output text 2>/tmp/sg.err)
+          if [ -z "$SGS" ]; then
+            echo "::warning::Could not read Security Groups (deploy role lacks ec2:DescribeInstances?). Ensure 80+443 are open to 0.0.0.0/0 and 3000 is NOT public. $(cat /tmp/sg.err 2>/dev/null)"
+            exit 0
+          fi
+          echo "Instance Security Groups: $SGS"
+          for sg in $SGS; do
+            for port in 80 443; do
+              aws ec2 authorize-security-group-ingress --region "$AWS_REGION" --group-id "$sg" \
+                --protocol tcp --port "$port" --cidr 0.0.0.0/0 >/dev/null 2>&1 \
+                && echo "opened tcp/$port on $sg" || echo "tcp/$port on $sg already open or not permitted"
+            done
+            aws ec2 revoke-security-group-ingress --region "$AWS_REGION" --group-id "$sg" \
+              --protocol tcp --port 3000 --cidr 0.0.0.0/0 >/dev/null 2>&1 \
+              && echo "revoked public tcp/3000 on $sg" || echo "no public tcp/3000 rule to revoke on $sg (or not permitted)"
+          done
+          exit 0
+
+      # Authoritative external verification from the GitHub runner (real public
+      # internet, not the instance). Fails the deploy if the permanent public
+      # HTTPS API is not healthy — no secrets printed.
+      - name: Verify public HTTPS endpoint https://api.souvikpati.in
+        run: |
+          set -e
+          url="https://api.souvikpati.in/v1/health"
+          echo "External GET $url"
+          code=$(curl -s -o /tmp/pub.out -w '%{http_code}' --max-time 25 "$url" || echo 000)
+          echo "public https status=$code body=$(cat /tmp/pub.out 2>/dev/null || true)"
+          echo "----- TLS / headers -----"
+          curl -sS -I --max-time 25 "$url" 2>&1 | sed -n '1,12p' || true
+          if [ "$code" != "200" ]; then
+            echo "::error::Public https://api.souvikpati.in/v1/health did not return 200 (got $code). Check Security Group 443 and Nginx."
+            exit 1
+          fi
+          echo "Public HTTPS API is live and healthy."

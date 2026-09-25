@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api_client.dart';
 import '../core/api_exception.dart';
@@ -117,6 +118,7 @@ class AuthController extends StateNotifier<AuthState> {
         await ref.read(authServiceProvider).signInWithGoogleGetIdToken();
 
     // Stage 5: exchange the Firebase token for a backend session.
+    debugPrint('[auth] stage=backend_auth POST /v1/auth/google');
     final Map<String, dynamic> res;
     try {
       res = await ref.read(authRepoProvider).loginWithGoogle(idToken);
@@ -132,8 +134,10 @@ class AuthController extends StateNotifier<AuthState> {
         );
 
     // Stage 6: load the profile so the shell has data immediately.
+    debugPrint('[auth] stage=me GET /v1/me');
     try {
       final me = await ref.read(userRepoProvider).me();
+      debugPrint('[auth] stage=done signed_in');
       state = state.copyWith(phase: AuthPhase.signedIn, me: me);
     } on ApiException catch (e) {
       throw AuthFailure(

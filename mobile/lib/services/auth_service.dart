@@ -98,6 +98,7 @@ class AuthService {
     }
 
     // Stage 1: Google Sign-In (Google Play Services).
+    debugPrint('[auth] stage=google_sign_in');
     GoogleSignInAccount? googleUser;
     try {
       googleUser = await _googleSignIn.signIn();
@@ -133,6 +134,7 @@ class AuthService {
     }
 
     // Stage 3: Firebase credential sign-in.
+    debugPrint('[auth] stage=firebase_auth');
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
       idToken: googleIdToken,
@@ -153,6 +155,8 @@ class AuthService {
       throw const AuthFailure(
           AuthStage.tokenExchange, 'NO_ID_TOKEN', 'Firebase returned an empty ID token');
     }
+    // A non-null Firebase ID token exists. Never log the token itself.
+    debugPrint('[auth] stage=firebase_id_token ok (len ${idToken.length})');
     return idToken;
   }
 

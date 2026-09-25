@@ -91,27 +91,33 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-      # Prove the release build receives a usable backend URL. An empty or
-      # wrong-host PROD_API_BASE_URL produces exactly the on-device "No
-      # connection" symptom (empty base, or cleartext blocked because Android
-      # only permits cleartext HTTP to the host in network_security_config).
-      # Only the scheme/host are printed (the IP is already public in the repo);
-      # the full secret value is never echoed. Fails fast if empty.
+      # The permanent production API is https://api.souvikpati.in and nothing
+      # else. Fail the release if PROD_API_BASE_URL is empty, is not HTTPS, is
+      # not the expected host, or points at a raw IP (the old EC2 IPs must never
+      # ship in a release). Only scheme/host are printed; the secret is never
+      # echoed. This enforces Part 1/12: no IP, no cleartext, no fallback.
       - name: Validate release API base URL (no secret printed)
         env:
           PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
-          CLEARTEXT_HOST: "13.235.73.14"
+          EXPECTED_HOST: "api.souvikpati.in"
         run: |
           if [ -z "$PROD_API_BASE_URL" ]; then
-            echo "::error::PROD_API_BASE_URL secret is EMPTY. The release app would have no backend URL and every request fails as 'No connection'. Set it to http://13.235.73.14:3000 in repo Settings → Secrets → Actions."
+            echo "::error::PROD_API_BASE_URL secret is EMPTY. Set it to https://api.souvikpati.in in repo Settings → Secrets and variables → Actions."
             exit 1
           fi
           scheme="${PROD_API_BASE_URL%%://*}"
           rest="${PROD_API_BASE_URL#*://}"; host="${rest%%/*}"; host="${host%%:*}"
           echo "Release API base: scheme=$scheme host=$host"
-          if [ "$scheme" = "http" ] && [ "$host" != "$CLEARTEXT_HOST" ]; then
-            echo "::warning::scheme=http but host=$host is not the cleartext-allowed host ($CLEARTEXT_HOST). Android will block this request (CLEARTEXT_BLOCKED) unless you add the host to network_security_config or serve HTTPS."
+          if [ "$scheme" != "https" ]; then
+            echo "::error::Production API must be HTTPS (got scheme=$scheme). Expected https://$EXPECTED_HOST."; exit 1
           fi
+          if [ "$host" != "$EXPECTED_HOST" ]; then
+            echo "::error::Production API host must be $EXPECTED_HOST (got $host). Do not ship a raw IP or any other host."; exit 1
+          fi
+          case "$host" in
+            *[0-9].[0-9]*[0-9].[0-9]*[0-9].[0-9]*) echo "::error::API host looks like a raw IP ($host); the permanent endpoint is https://$EXPECTED_HOST."; exit 1 ;;
+          esac
+          echo "OK: release targets https://$EXPECTED_HOST (no IP, no cleartext)."
 
       - name: Build App Bundle (AAB)
         run: >

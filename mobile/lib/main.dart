@@ -6,11 +6,14 @@ import 'state/providers.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Bounded internally so a slow/failed Firebase init can never block startup.
   await FirebaseBootstrap.init();
 
   final container = ProviderContainer();
-  // Kick off session bootstrap (loads tokens, fetches profile if signed in).
-  await container.read(authControllerProvider.notifier).bootstrap();
+  // Start session restoration WITHOUT blocking the first frame. The splash
+  // shows while phase == loading; the router redirects to onboarding or home
+  // as soon as bootstrap resolves, so the app can never hang on the splash.
+  container.read(authControllerProvider.notifier).bootstrap();
 
   runApp(
     UncontrolledProviderScope(

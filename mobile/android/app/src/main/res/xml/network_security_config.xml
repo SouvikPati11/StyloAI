@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  StyloAI Android network security.
+
+  Default: cleartext (plain HTTP) is BLOCKED app-wide — all traffic must be HTTPS.
+
+  Temporary exception: the production backend is currently reachable only over
+  HTTP by IP (http://13.235.73.14:3000) until `https://api.<domain>` is set up
+  with Nginx + a TLS certificate. The exception is scoped to that single host,
+  so no other cleartext traffic is permitted. Once the backend is served over
+  HTTPS and the build points at the domain, this domain-config can be removed
+  and the app will be fully HTTPS-only.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">13.235.73.14</domain>
+    </domain-config>
+</network-security-config>

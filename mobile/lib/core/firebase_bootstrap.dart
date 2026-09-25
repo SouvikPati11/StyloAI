@@ -16,11 +16,15 @@ class FirebaseBootstrap {
       return;
     }
     try {
+      // Bounded so a hung native init can never trap the app before first frame.
       await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform);
+        options: DefaultFirebaseOptions.currentPlatform,
+      ).timeout(const Duration(seconds: 12));
       ready = true;
     } catch (e) {
-      debugPrint('Firebase init failed: $e');
+      // Non-fatal: the app still starts and falls back to the signed-out /
+      // setup-required flow instead of hanging.
+      debugPrint('Firebase init failed or timed out: $e');
       ready = false;
     }
   }

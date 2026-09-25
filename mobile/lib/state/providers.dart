@@ -68,23 +68,44 @@ class AuthController extends StateNotifier<AuthState> {
       : super(const AuthState(
             phase: AuthPhase.loading, firebaseConfigured: false));
 
+  /// Restores a session on startup. Always resolves to a terminal phase
+  /// (signedIn or signedOut) — it never leaves the app in [AuthPhase.loading],
+  /// so the splash can never hang. A stored session that can't be validated
+  /// (expired, invalid, offline, or timed out) falls back to a recoverable
+  /// signed-out state so the user can sign in again.
   Future<void> bootstrap() async {
-    final tokens = ref.read(tokenStoreProvider);
-    await tokens.load();
-    final configured = ref.read(authServiceProvider).isConfigured;
-    if (tokens.hasSession) {
-      try {
-        final me = await ref.read(userRepoProvider).me();
-        state = AuthState(
-            phase: AuthPhase.signedIn, me: me, firebaseConfigured: configured);
-        _postSignIn();
-        return;
-      } catch (_) {
-        await tokens.clear();
+    final configured = _firebaseConfigured();
+    try {
+      final tokens = ref.read(tokenStoreProvider);
+      await tokens.load();
+      if (tokens.hasSession) {
+        try {
+          final me = await ref
+              .read(userRepoProvider)
+              .me()
+              .timeout(const Duration(seconds: 10));
+          state = AuthState(
+              phase: AuthPhase.signedIn, me: me, firebaseConfigured: configured);
+          _postSignIn();
+          return;
+        } catch (_) {
+          // Session restoration failed — clear it and continue signed out.
+          await tokens.clear();
+        }
       }
+    } catch (_) {
+      // Any unexpected bootstrap error still resolves to a usable state.
     }
     state =
         AuthState(phase: AuthPhase.signedOut, firebaseConfigured: configured);
+  }
+
+  bool _firebaseConfigured() {
+    try {
+      return ref.read(authServiceProvider).isConfigured;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Full sign-in: Firebase Google → backend exchange → load profile.

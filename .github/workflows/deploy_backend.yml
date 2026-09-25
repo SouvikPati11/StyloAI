@@ -85,6 +85,14 @@ jobs:
           # The SSM shell has no HOME/USER; git (and other tools) need them.
           export HOME=/home/ec2-user
           export USER=ec2-user
+          # Strictly non-interactive: nothing may wait for stdin (SSM has none),
+          # or the command would hang forever and stay "InProgress".
+          export CI=true
+          export NPM_CONFIG_YES=true
+          export DEBIAN_FRONTEND=noninteractive
+          # git must never prompt for credentials — fail fast instead of hanging.
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_ASKPASS=/usr/bin/true
           REGION=ap-south-1
           PARAM_PATH=/styloai/prod
           APP_DIR=/home/ec2-user/StyloAI/backend
@@ -92,7 +100,9 @@ jobs:
           # Run all deployment commands from the backend dir as the ec2-user home.
           cd "$APP_DIR"
           git config --global --add safe.directory /home/ec2-user/StyloAI
-          git fetch origin claude/happy-cori-w42sa5
+          # timeout + disabled credential helper: a private-repo auth prompt can
+          # never block the deployment; it errors quickly with a clear message.
+          timeout 180 git -c credential.helper= fetch origin claude/happy-cori-w42sa5
           git checkout claude/happy-cori-w42sa5
           git reset --hard origin/claude/happy-cori-w42sa5
 
@@ -135,10 +145,13 @@ jobs:
           CORS_ALLOWED_ORIGINS=*
           ENVFILE
 
-          npm ci
-          npx prisma generate
-          npx prisma migrate deploy
-          npm run build
+          # Each step is time-bounded so no build/install/DB step can hang the
+          # deployment. devDeps are required (prisma + nest CLI); local binaries
+          # are called directly so `npx` can never prompt to install.
+          timeout 600 npm ci --include=dev --no-audit --no-fund
+          timeout 300 ./node_modules/.bin/prisma generate
+          timeout 180 ./node_modules/.bin/prisma migrate deploy
+          timeout 420 npm run build
 
           # Ensure the runtime user owns what it needs; keep .env private.
           chown -R ec2-user:ec2-user /home/ec2-user/StyloAI
@@ -160,20 +173,39 @@ jobs:
           echo "Deployment succeeded; styloai-backend is active."
           EOF
 
+          # Do not stack deployments: cancel any StyloAI deployment command still
+          # in flight on this instance (e.g. a previous hung run) before starting.
+          for st in Pending InProgress Delayed; do
+            STALE=$(aws ssm list-commands --region "$AWS_REGION" \
+              --instance-id "$INSTANCE_ID" --filters "key=Status,value=$st" \
+              --query "Commands[?Comment=='StyloAI backend deployment'].CommandId" \
+              --output text 2>/dev/null || true)
+            for c in $STALE; do
+              echo "Cancelling stale in-flight deployment command ($st): $c"
+              aws ssm cancel-command --region "$AWS_REGION" --command-id "$c" || true
+            done
+          done
+
           # Send the command (no secrets in the parameters) and capture its id.
+          # executionTimeout is a hard backstop: SSM terminates the remote script
+          # and marks the invocation terminal if it ever exceeds 25 minutes, so a
+          # hang can never stay "InProgress" indefinitely.
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
             --comment "StyloAI backend deployment" \
-            --parameters "$(jq -n --rawfile s deploy-command.sh '{commands: [$s]}')" \
+            --parameters "$(jq -n --rawfile s deploy-command.sh \
+              '{commands: [$s], executionTimeout: ["1500"]}')" \
             --query Command.CommandId --output text)
           echo "SSM CommandId: $CMD_ID"
 
-          # Poll until the command reaches a terminal state (up to ~15 minutes),
-          # long enough for npm ci + prisma migrate + build.
+          # Poll until the command reaches a terminal state. Budget (~30 min) sits
+          # just above the SSM executionTimeout so we wait for SSM's own verdict
+          # rather than pre-empting a legitimately long (but bounded) deploy. A
+          # genuinely hung step is failed far sooner by its per-step `timeout`.
           STATUS="Pending"
-          for _ in $(seq 1 60); do
+          for _ in $(seq 1 120); do
             STATUS=$(aws ssm get-command-invocation \
               --region "$AWS_REGION" \
               --command-id "$CMD_ID" \
@@ -185,17 +217,32 @@ jobs:
             esac
           done
 
+          # If the budget elapsed while still non-terminal, cancel so nothing
+          # lingers on the instance, then treat it as a failure.
+          case "$STATUS" in
+            Pending|InProgress|Delayed)
+              echo "Command still '$STATUS' after the poll budget; cancelling."
+              aws ssm cancel-command --region "$AWS_REGION" --command-id "$CMD_ID" || true
+              STATUS="TimedOut(waiting)"
+              ;;
+          esac
+
           echo "Final SSM status: $STATUS"
+          DETAILS=$(aws ssm get-command-invocation \
+            --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StatusDetails --output text 2>/dev/null || true)
+          echo "Status details: ${DETAILS:-n/a}"
           echo "----- remote output (non-secret) -----"
           aws ssm get-command-invocation \
             --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-            --query StandardOutputContent --output text || true
+            --query StandardOutputContent --output text 2>/dev/null || true
 
           if [ "$STATUS" != "Success" ]; then
             echo "----- remote errors -----"
             aws ssm get-command-invocation \
               --region "$AWS_REGION" --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
-              --query StandardErrorContent --output text || true
+              --query StandardErrorContent --output text 2>/dev/null || true
             echo "::error::Backend deployment failed (SSM status: $STATUS)"
             exit 1
           fi
+          echo "Backend deployment completed successfully."

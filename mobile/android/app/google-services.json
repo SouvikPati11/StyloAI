@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "165332899972-ei7pp4t6trokcl2i3s6lko7q2tv3l537.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "app.stylo.styloai",
+            "certificate_hash": "7329918b32f0a91dfc9a65d46d21f561396c0b85"
+          }
+        },
+        {
           "client_id": "165332899972-c150scdvfj0jv3qit03fdojf5j5l3j9g.apps.googleusercontent.com",
           "client_type": 3
         }

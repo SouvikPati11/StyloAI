@@ -49,14 +49,20 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               horizontal: AppSpace.xl, vertical: AppSpace.sm),
           child: Column(
             children: [
-              // Skip stays consistent with the app's accent text buttons.
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => context.go('/sign-in'),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.muted),
-                  child: const Text('Skip'),
-                ),
+              // Brand lockup on the left; Skip on the right.
+              Row(
+                children: [
+                  const BrandLogo(size: 32, radius: 9),
+                  const SizedBox(width: AppSpace.sm),
+                  const StyloWordmark(size: 18),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => context.go('/sign-in'),
+                    style:
+                        TextButton.styleFrom(foregroundColor: AppColors.muted),
+                    child: const Text('Skip'),
+                  ),
+                ],
               ),
               Expanded(
                 child: PageView.builder(

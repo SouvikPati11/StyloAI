@@ -1,8 +1,48 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'tokens.dart';
 
 /// Shared, reusable UI components — the visual vocabulary every screen speaks.
+
+/// The StyloAI app logo (the real brand asset), rounded and never distorted.
+class BrandLogo extends StatelessWidget {
+  final double size;
+  final double radius;
+  const BrandLogo({super.key, this.size = 96, this.radius = AppRadii.lg});
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: Image.asset(
+        'assets/brand/logo.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        filterQuality: FilterQuality.high,
+      ),
+    );
+  }
+}
+
+/// The "StyloAI" wordmark — "Stylo" in ink/ivory, "AI" in champagne gold, echoing
+/// the logo. [onDark] switches the base color for dark canvases.
+class StyloWordmark extends StatelessWidget {
+  final double size;
+  final bool onDark;
+  const StyloWordmark({super.key, this.size = 26, this.onDark = false});
+  @override
+  Widget build(BuildContext context) {
+    final base = onDark ? AppColors.inkDark : AppColors.ink;
+    final gold = onDark ? AppColors.accentDark : AppColors.accent;
+    TextStyle s(Color c) => GoogleFonts.fraunces(
+        fontSize: size, fontWeight: FontWeight.w600, letterSpacing: -0.3, color: c);
+    return Text.rich(TextSpan(children: [
+      TextSpan(text: 'Stylo', style: s(base)),
+      TextSpan(text: 'AI', style: s(gold)),
+    ]));
+  }
+}
 
 /// Primary CTA.
 class PrimaryButton extends StatelessWidget {
@@ -101,11 +141,12 @@ class CreditChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Credits are the product's "currency" — rendered in the metallic gold
+    // accent so value reads as premium, distinct from navy primary actions.
+    final gold = isDark ? AppColors.accentDark : AppColors.accent;
     return Material(
-      color: Theme.of(context).brightness == Brightness.dark
-          ? AppColors.accentSoftDark
-          : AppColors.accentSoft,
+      color: isDark ? AppColors.accentSoftDark : AppColors.accentSoft,
       borderRadius: BorderRadius.circular(AppRadii.pill),
       child: InkWell(
         borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -115,13 +156,11 @@ class CreditChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.auto_awesome, size: 15, color: scheme.primary),
+              Icon(Icons.auto_awesome, size: 15, color: gold),
               const SizedBox(width: 6),
               Text(balance == null ? '—' : '$balance',
                   style: TextStyle(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14)),
+                      color: gold, fontWeight: FontWeight.w700, fontSize: 14)),
             ],
           ),
         ),
@@ -136,21 +175,20 @@ class CostBadge extends StatelessWidget {
   const CostBadge({super.key, required this.cost});
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gold = isDark ? AppColors.accentDark : AppColors.accent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: scheme.primary.withValues(alpha: 0.08),
+        color: gold.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(Icons.auto_awesome, size: 13, color: scheme.primary),
+        Icon(Icons.auto_awesome, size: 13, color: gold),
         const SizedBox(width: 5),
         Text('$cost ${cost == 1 ? 'credit' : 'credits'}',
             style: TextStyle(
-                color: scheme.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 12.5)),
+                color: gold, fontWeight: FontWeight.w600, fontSize: 12.5)),
       ]),
     );
   }

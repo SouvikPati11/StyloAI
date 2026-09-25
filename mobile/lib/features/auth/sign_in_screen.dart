@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../design/components.dart' show showSnack;
+import '../../design/components.dart' show showSnack, BrandLogo;
 import '../../design/tokens.dart';
 import '../../services/auth_service.dart';
 import '../../state/providers.dart';
 
-/// Premium, dark, editorial sign-in screen.
-///
-/// The visual language matches the splash (deep near-black canvas, plum glow,
-/// two-tone wordmark) so the launch → sign-in feels like one product. Only the
-/// presentation changed here; the authentication flow — typed [AuthFailure]
-/// handling, the Firebase-configured guard, and router navigation — is
-/// unchanged. All colors come from the existing StyloAI dark tokens.
+/// Premium, dark, editorial sign-in screen — built around the StyloAI logo and
+/// the navy/champagne-gold identity. Gender-neutral: it speaks to anyone who
+/// wants AI-assisted styling. Only the presentation is bespoke here; the auth
+/// flow (typed [AuthFailure] handling, Firebase-configured guard, routing) is
+/// unchanged.
 class SignInScreen extends ConsumerStatefulWidget {
   const SignInScreen({super.key});
   @override
@@ -34,9 +32,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
       if (mounted) context.go('/home');
     } on AuthFailure catch (f) {
-      // Real reason to logcat (no tokens/secrets); friendly message to the user.
-      // Cancellation stays silent.
-      f.log();
+      f.log(); // real reason to logcat; no tokens/secrets
       if (!f.isCancelled && mounted) showSnack(context, f.userMessage);
     } catch (e) {
       debugPrint('[auth] unexpected sign-in error: $e');
@@ -56,9 +52,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(-0.7, -0.9),
-            radius: 1.3,
-            colors: [Color(0x33C98A9B), Color(0x0DC98A9B), AppColors.bgDark],
-            stops: [0.0, 0.4, 0.85],
+            radius: 1.35,
+            colors: [Color(0x30CBA867), Color(0x0DCBA867), AppColors.bgDark],
+            stops: [0.0, 0.42, 0.85],
           ),
         ),
         child: SafeArea(
@@ -68,9 +64,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const _BrandRow(),
-
-                // Editorial hero: display headline + value line + product motifs.
+                const BrandLogo(size: 64, radius: 16),
                 Expanded(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -79,8 +73,9 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                       _headline(),
                       const SizedBox(height: AppSpace.lg),
                       Text(
-                        'Upload your photo and preview outfits, hair, glasses '
-                        'and AI looks — while you stay recognizably you.',
+                        'Upload your photo and preview outfits, hairstyles, '
+                        'glasses and complete AI looks — designed around you, '
+                        'while you stay recognizably you.',
                         style: GoogleFonts.inter(
                             fontSize: 15,
                             height: 1.55,
@@ -91,8 +86,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                     ],
                   ),
                 ),
-
-                // Bottom action area — intentional, uncluttered.
                 if (!configured) ...[
                   Text(
                     'Sign-in needs Firebase configuration. Tap below for the exact setup steps.',
@@ -119,12 +112,12 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
 
   Widget _headline() {
     TextStyle style(Color c) => GoogleFonts.fraunces(
-        fontSize: 40, height: 1.05, fontWeight: FontWeight.w600, color: c);
+        fontSize: 38, height: 1.06, fontWeight: FontWeight.w600, color: c);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Look the part.', style: style(AppColors.inkDark)),
-        Text('Styled by AI.', style: style(AppColors.accentDark)),
+        Text('Your style,', style: style(AppColors.inkDark)),
+        Text('styled by AI.', style: style(AppColors.accentDark)),
       ],
     );
   }
@@ -147,48 +140,6 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   }
 }
 
-/// Compact brand lockup at the top of the screen (emblem + two-tone wordmark).
-class _BrandRow extends StatelessWidget {
-  const _BrandRow();
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: AppColors.accentSoftDark,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppColors.accentDark, width: 1.2),
-          ),
-          child: const Icon(Icons.auto_awesome,
-              size: 18, color: AppColors.accentDark),
-        ),
-        const SizedBox(width: AppSpace.md),
-        Text.rich(
-          TextSpan(children: [
-            TextSpan(
-                text: 'Stylo',
-                style: GoogleFonts.fraunces(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.inkDark)),
-            TextSpan(
-                text: 'AI',
-                style: GoogleFonts.fraunces(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.accentDark)),
-          ]),
-        ),
-      ],
-    );
-  }
-}
-
-/// A row of product-capability chips, tying iconography to the accent.
 class _MotifRow extends StatelessWidget {
   const _MotifRow();
   @override
@@ -198,7 +149,8 @@ class _MotifRow extends StatelessWidget {
       runSpacing: AppSpace.sm,
       children: [
         _MotifChip(Icons.checkroom, 'Outfits'),
-        _MotifChip(Icons.content_cut, 'Hair'),
+        _MotifChip(Icons.content_cut, 'Hairstyles'),
+        _MotifChip(Icons.visibility_outlined, 'Glasses'),
         _MotifChip(Icons.auto_awesome, 'AI looks'),
       ],
     );
@@ -235,7 +187,7 @@ class _MotifChip extends StatelessWidget {
   }
 }
 
-/// Primary CTA. A light surface makes it the clear primary action on the dark
+/// Primary CTA — a light surface makes it the clear primary action on the dark
 /// canvas; the Google mark is aligned to the label.
 class _GoogleButton extends StatelessWidget {
   final String label;

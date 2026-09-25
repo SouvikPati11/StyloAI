@@ -3,7 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../design/tokens.dart';
 
 /// Builds the light and dark [ThemeData] from the design tokens. A refined
-/// serif display face pairs with a clean sans for body — premium and editorial.
+/// serif display face (Fraunces) pairs with a clean sans (Inter) for body —
+/// premium, editorial, and gender-neutral. Navy is the interactive color;
+/// champagne gold is the metallic accent.
 class AppTheme {
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
@@ -13,11 +15,14 @@ class AppTheme {
     final ink = isDark ? AppColors.inkDark : AppColors.ink;
     final bg = isDark ? AppColors.bgDark : AppColors.bg;
     final surface = isDark ? AppColors.surfaceDark : AppColors.surface;
-    final accent = isDark ? AppColors.accentDark : AppColors.accent;
     final line = isDark ? AppColors.lineDark : AppColors.line;
     final muted = isDark ? AppColors.mutedDark : AppColors.muted;
 
-    final displayFont = GoogleFonts.fraunces();
+    // Navy is primary in light; on the dark canvas the gold accent leads CTAs.
+    final primary = isDark ? AppColors.accentDark : AppColors.brand;
+    final onPrimary = isDark ? AppColors.ink : AppColors.onBrand;
+    final accent = isDark ? AppColors.accentDark : AppColors.accent;
+
     final bodyBase = GoogleFonts.interTextTheme();
 
     final textTheme = bodyBase
@@ -48,10 +53,12 @@ class AppTheme {
 
     final scheme = ColorScheme(
       brightness: brightness,
-      primary: accent,
-      onPrimary: AppColors.onAccent,
+      primary: primary,
+      onPrimary: onPrimary,
       secondary: accent,
-      onSecondary: AppColors.onAccent,
+      onSecondary: isDark ? AppColors.ink : AppColors.onAccent,
+      tertiary: accent,
+      onTertiary: isDark ? AppColors.ink : AppColors.onAccent,
       error: AppColors.error,
       onError: Colors.white,
       surface: surface,
@@ -64,9 +71,9 @@ class AppTheme {
       scaffoldBackgroundColor: bg,
       colorScheme: scheme,
       textTheme: textTheme,
-      primaryColor: accent,
+      primaryColor: primary,
       dividerColor: line,
-      fontFamily: displayFont.fontFamily,
+      fontFamily: GoogleFonts.fraunces().fontFamily,
       appBarTheme: AppBarTheme(
         backgroundColor: bg,
         surfaceTintColor: Colors.transparent,
@@ -100,14 +107,14 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
-          borderSide: BorderSide(color: accent, width: 1.5),
+          borderSide: BorderSide(color: primary, width: 1.5),
         ),
         hintStyle: TextStyle(color: muted),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: accent,
-          foregroundColor: AppColors.onAccent,
+          backgroundColor: primary,
+          foregroundColor: onPrimary,
           minimumSize: const Size.fromHeight(54),
           textStyle:
               GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w600),
@@ -127,7 +134,7 @@ class AppTheme {
         ),
       ),
       textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(foregroundColor: accent),
+        style: TextButton.styleFrom(foregroundColor: primary),
       ),
       chipTheme: ChipThemeData(
         backgroundColor: surface,
@@ -139,7 +146,7 @@ class AppTheme {
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: surface,
-        selectedItemColor: accent,
+        selectedItemColor: primary,
         unselectedItemColor: muted,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
@@ -149,7 +156,7 @@ class AppTheme {
         contentTextStyle: GoogleFonts.inter(color: bg),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadii.pill)),
+            borderRadius: BorderRadius.circular(AppRadii.sm)),
       ),
     );
   }

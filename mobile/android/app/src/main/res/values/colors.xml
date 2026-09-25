@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- StyloAI brand navy (from the logo icon background). -->
+    <color name="styloai_navy">#0E1626</color>
+</resources>

@@ -41,21 +41,16 @@ class HomeScreen extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(greeting, style: t.bodySmall),
-                        Text(name.isEmpty ? 'Welcome' : name,
-                            style: t.headlineMedium),
-                      ],
-                    ),
-                  ),
+                  const StyloWordmark(size: 22),
+                  const Spacer(),
                   CreditChip(
                       balance: me?.balance,
                       onTap: () => context.push('/credits')),
                 ],
               ),
+              const SizedBox(height: AppSpace.xl),
+              Text(greeting, style: t.bodySmall),
+              Text(name.isEmpty ? 'Welcome' : name, style: t.headlineMedium),
               const SizedBox(height: AppSpace.xl),
               _ImproveCta(onTap: () => _openCreate(context)),
               const SizedBox(height: AppSpace.xl),

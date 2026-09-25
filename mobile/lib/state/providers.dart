@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/api_client.dart';
+import '../core/api_exception.dart';
 import '../core/token_store.dart';
 import '../data/models.dart';
 import '../data/repositories.dart';
@@ -109,16 +110,33 @@ class AuthController extends StateNotifier<AuthState> {
   }
 
   /// Full sign-in: Firebase Google → backend exchange → load profile.
+  /// Throws a typed [AuthFailure] identifying the exact stage that failed.
   Future<void> signInWithGoogle() async {
+    // Stage 1–4: Google + Firebase → Firebase ID token (throws AuthFailure).
     final idToken =
         await ref.read(authServiceProvider).signInWithGoogleGetIdToken();
-    final res = await ref.read(authRepoProvider).loginWithGoogle(idToken);
+
+    // Stage 5: exchange the Firebase token for a backend session.
+    final Map<String, dynamic> res;
+    try {
+      res = await ref.read(authRepoProvider).loginWithGoogle(idToken);
+    } on ApiException catch (e) {
+      throw AuthFailure(e.isNetwork ? AuthStage.network : AuthStage.backend,
+          e.code, 'Backend /auth/google failed: ${e.code} ${e.message}');
+    }
     await ref.read(tokenStoreProvider).save(
           res['access_token'] as String,
           res['refresh_token'] as String,
         );
-    final me = await ref.read(userRepoProvider).me();
-    state = state.copyWith(phase: AuthPhase.signedIn, me: me);
+
+    // Stage 6: load the profile so the shell has data immediately.
+    try {
+      final me = await ref.read(userRepoProvider).me();
+      state = state.copyWith(phase: AuthPhase.signedIn, me: me);
+    } on ApiException catch (e) {
+      throw AuthFailure(e.isNetwork ? AuthStage.network : AuthStage.backend,
+          e.code, 'Load profile after sign-in failed: ${e.code} ${e.message}');
+    }
     _postSignIn();
   }
 

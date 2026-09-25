@@ -10,12 +10,16 @@ class PrimaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
   final bool loading;
   final IconData? icon;
+
+  /// Optional leading widget (e.g. a brand glyph) shown before the label.
+  final Widget? leading;
   const PrimaryButton(
       {super.key,
       required this.label,
       this.onPressed,
       this.loading = false,
-      this.icon});
+      this.icon,
+      this.leading});
 
   @override
   Widget build(BuildContext context) {
@@ -30,13 +34,39 @@ class PrimaryButton extends StatelessWidget {
           : Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (icon != null) ...[
+                if (leading != null) ...[leading!, const SizedBox(width: 10)],
+                if (icon != null && leading == null) ...[
                   Icon(icon, size: 20),
                   const SizedBox(width: 8)
                 ],
                 Text(label),
               ],
             ),
+    );
+  }
+}
+
+/// A small white circular badge with a Google "G" — a tasteful, asset-free
+/// brand mark for the "Continue with Google" button that stays consistent with
+/// the design system (no third-party image assets).
+class GoogleGlyph extends StatelessWidget {
+  const GoogleGlyph({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+      child: const Text(
+        'G',
+        style: TextStyle(
+          color: Color(0xFF4285F4), // Google blue
+          fontWeight: FontWeight.w700,
+          fontSize: 15,
+          height: 1.0,
+        ),
+      ),
     );
   }
 }

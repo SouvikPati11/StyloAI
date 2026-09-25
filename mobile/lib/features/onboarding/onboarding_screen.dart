@@ -45,13 +45,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     return Scaffold(
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(AppSpace.gutter),
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpace.xl, vertical: AppSpace.sm),
           child: Column(
             children: [
+              // Skip stays consistent with the app's accent text buttons.
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => context.go('/sign-in'),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.muted),
                   child: const Text('Skip'),
                 ),
               ),
@@ -65,28 +68,39 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     return Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
+                        // Layered accent disc — soft ground with a stronger
+                        // inner ring, echoing the brand mark on splash/sign-in.
                         Container(
-                          width: 96,
-                          height: 96,
+                          width: 116,
+                          height: 116,
+                          alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: scheme.primary.withValues(alpha: 0.08),
+                            color: scheme.primary.withValues(alpha: 0.06),
                             shape: BoxShape.circle,
                           ),
-                          child: Icon(s.icon, size: 42, color: scheme.primary),
+                          child: Container(
+                            width: 84,
+                            height: 84,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: scheme.primary.withValues(alpha: 0.12),
+                              shape: BoxShape.circle,
+                            ),
+                            child:
+                                Icon(s.icon, size: 38, color: scheme.primary),
+                          ),
                         ),
                         const SizedBox(height: AppSpace.xxl),
+                        // Fraunces display face (headlineMedium) — consistent
+                        // with the rest of the app's editorial headings.
                         Text(s.title,
                             textAlign: TextAlign.center,
-                            style: t.displaySmall ?? t.headlineMedium),
+                            style: t.headlineMedium),
                         const SizedBox(height: AppSpace.md),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpace.lg),
-                          child: Text(s.body,
-                              textAlign: TextAlign.center,
-                              style: t.bodyLarge
-                                  ?.copyWith(color: AppColors.inkSoft)),
-                        ),
+                        Text(s.body,
+                            textAlign: TextAlign.center,
+                            style: t.bodyLarge
+                                ?.copyWith(color: AppColors.inkSoft)),
                       ],
                     );
                   },
@@ -104,7 +118,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     decoration: BoxDecoration(
                       color: i == _page
                           ? scheme.primary
-                          : Theme.of(context).dividerColor,
+                          : scheme.primary.withValues(alpha: 0.18),
                       borderRadius: BorderRadius.circular(AppRadii.pill),
                     ),
                   ),
@@ -122,7 +136,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   }
                 },
               ),
-              const SizedBox(height: AppSpace.sm),
+              const SizedBox(height: AppSpace.lg),
             ],
           ),
         ),

@@ -14,5 +14,17 @@ void main() {
       expect(android.appId, contains(':android:'));
       expect(android.apiKey, isNotEmpty);
     });
+
+    test('web client ID is present and used as the Google Sign-In audience', () {
+      // Required on Android as serverClientId so google_sign_in returns an ID
+      // token Firebase will accept (this project has no default_web_client_id
+      // resource because the google-services Gradle plugin is not applied).
+      expect(DefaultFirebaseOptions.hasWebClientId, isTrue);
+      expect(DefaultFirebaseOptions.webClientId,
+          endsWith('.apps.googleusercontent.com'));
+      // The web client belongs to the same Firebase project (same number).
+      expect(DefaultFirebaseOptions.webClientId,
+          startsWith('${DefaultFirebaseOptions.android.messagingSenderId}-'));
+    });
   });
 }

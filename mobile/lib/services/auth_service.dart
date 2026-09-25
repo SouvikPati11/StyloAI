@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../core/firebase_bootstrap.dart';
+import '../core/firebase_options.dart';
 
 /// The stage of the auth flow at which a failure occurred. Used to give the
 /// user an accurate, friendly message and developers a precise log.
@@ -66,9 +67,27 @@ class AuthFailure implements Exception {
 /// Google Sign-In via Firebase. Returns a Firebase ID token that the backend
 /// verifies before issuing its own session JWTs. No backend secrets here.
 class AuthService {
-  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  AuthService() : _googleSignIn = _createGoogleSignIn();
+
+  final GoogleSignIn _googleSignIn;
 
   bool get isConfigured => FirebaseBootstrap.ready;
+
+  /// Builds the [GoogleSignIn] client for this project.
+  ///
+  /// On Android, `google_sign_in` 6.x only returns a Google **ID token** (the
+  /// token Firebase needs) when it knows the backend/web OAuth client to use as
+  /// the token audience. Because this app does not apply the `google-services`
+  /// Gradle plugin (Firebase is initialized from [DefaultFirebaseOptions]), the
+  /// `default_web_client_id` resource is absent, so we must pass the web client
+  /// ID explicitly as `serverClientId`. Without it, `authentication.idToken`
+  /// comes back null and Firebase rejects the credential.
+  static GoogleSignIn _createGoogleSignIn() {
+    if (DefaultFirebaseOptions.hasWebClientId) {
+      return GoogleSignIn(serverClientId: DefaultFirebaseOptions.webClientId);
+    }
+    return GoogleSignIn();
+  }
 
   /// Runs the Google sign-in flow and returns a Firebase ID token, or throws an
   /// [AuthFailure] describing exactly where and why it failed.
@@ -101,10 +120,22 @@ class AuthService {
           'GoogleSignIn.authentication PlatformException code=${e.code} message=${e.message}');
     }
 
+    // The Google ID token must exist before we build the Firebase credential.
+    // If it is null/empty here, the app is missing its serverClientId /
+    // default_web_client_id configuration (the audience for the token), and
+    // Firebase would otherwise reject the credential with an opaque error.
+    final googleIdToken = googleAuth.idToken;
+    if (googleIdToken == null || googleIdToken.isEmpty) {
+      throw const AuthFailure(
+          AuthStage.tokenExchange,
+          'NO_GOOGLE_ID_TOKEN',
+          'Google returned no ID token — serverClientId / web OAuth client is not configured');
+    }
+
     // Stage 3: Firebase credential sign-in.
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
+      idToken: googleIdToken,
     );
     final UserCredential userCred;
     try {

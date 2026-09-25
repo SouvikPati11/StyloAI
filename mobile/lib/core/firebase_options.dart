@@ -27,4 +27,22 @@ class DefaultFirebaseOptions {
   );
 
   static FirebaseOptions get currentPlatform => android;
+
+  /// The Web OAuth 2.0 client ID for this Firebase project (the `client_type: 3`
+  /// entry in `google-services.json`). This project initializes Firebase from
+  /// [android] above rather than the `google-services` Gradle plugin, so the
+  /// `default_web_client_id` Android string resource that plugin would normally
+  /// generate does not exist. `google_sign_in` therefore needs this value passed
+  /// explicitly as `serverClientId` so the Google ID token it returns on Android
+  /// is minted with this project's web client as its audience — which is exactly
+  /// what Firebase Auth requires to accept the Google credential.
+  ///
+  /// This is a *public* OAuth client identifier (it ships in google-services.json
+  /// and in the app binary); it is not a secret. Backend secrets never live here.
+  static const String webClientId =
+      '165332899972-c150scdvfj0jv3qit03fdojf5j5l3j9g.apps.googleusercontent.com';
+
+  /// Whether a real web client ID is present (vs. an unconfigured placeholder).
+  static bool get hasWebClientId =>
+      webClientId.isNotEmpty && !webClientId.startsWith('REPLACE_WITH_');
 }

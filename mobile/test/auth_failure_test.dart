@@ -24,6 +24,16 @@ void main() {
       expect(f.userMessage.toLowerCase(), contains('configured'));
     });
 
+    test('missing Google ID token maps to a friendly, non-cancelled message', () {
+      // Raised when google_sign_in returns no ID token (serverClientId / web
+      // OAuth client not configured) — before the Firebase credential is built.
+      const f = AuthFailure(AuthStage.tokenExchange, 'NO_GOOGLE_ID_TOKEN',
+          'Google returned no ID token');
+      expect(f.isCancelled, isFalse);
+      expect(f.userMessage, isNotEmpty);
+      expect(f.userMessage.toLowerCase(), isNot(contains('id token')));
+    });
+
     test('network stage tells the user to check their connection', () {
       const f = AuthFailure(AuthStage.network, 'NETWORK', 'no connectivity');
       expect(f.userMessage.toLowerCase(), contains('connection'));

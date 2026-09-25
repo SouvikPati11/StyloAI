@@ -47,6 +47,7 @@ jobs:
           JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           set -euo pipefail
@@ -60,12 +61,21 @@ jobs:
               --value "$2" >/dev/null
             echo "stored /styloai/prod/$1"
           }
+          # The backend verifies Google/Firebase ID tokens with the Admin SDK,
+          # which requires the service-account JSON. Without it, every real
+          # POST /v1/auth/google returns 401 (the empty-body 400 probe never
+          # reaches verifyIdToken). Fail loudly so this is never silently broken.
+          if [ -z "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT_JSON secret is empty. Add the Firebase service-account JSON for project lifereset-556c7 as a GitHub Actions secret (compact single-line JSON). The backend cannot verify Google Sign-In tokens without it."
+            exit 1
+          fi
           put RDS_HOST              "$RDS_HOST"
           put RDS_PASSWORD          "$RDS_PASSWORD"
           put REDIS_URL            "$REDIS_URL"
           put JWT_ACCESS_SECRET    "$JWT_ACCESS_SECRET"
           put JWT_REFRESH_SECRET   "$JWT_REFRESH_SECRET"
           put FIREBASE_PROJECT_ID  "$FIREBASE_PROJECT_ID"
+          put FIREBASE_SERVICE_ACCOUNT_JSON "$FIREBASE_SERVICE_ACCOUNT_JSON"
           put GEMINI_API_KEY       "$GEMINI_API_KEY"
 
       # Run the deployment on the instance via SSM, then WAIT for it, check the
@@ -125,6 +135,7 @@ jobs:
           JWT_ACCESS_SECRET_VAL=$(getp JWT_ACCESS_SECRET)
           JWT_REFRESH_SECRET_VAL=$(getp JWT_REFRESH_SECRET)
           FIREBASE_PROJECT_ID_VAL=$(getp FIREBASE_PROJECT_ID)
+          FIREBASE_SERVICE_ACCOUNT_JSON_VAL=$(getp FIREBASE_SERVICE_ACCOUNT_JSON)
           GEMINI_API_KEY_VAL=$(getp GEMINI_API_KEY)
 
           # Written by redirection (values are never echoed to stdout).
@@ -157,6 +168,14 @@ jobs:
 
           CORS_ALLOWED_ORIGINS=*
           ENVFILE
+
+          # The Firebase service-account JSON is written on its own line, OUTSIDE
+          # the heredoc (its braces/quotes must not be shell-expanded), and
+          # single-quoted so dotenv treats the whole compact JSON as one value
+          # (escaped \n in the private key stays literal for JSON.parse). The
+          # value is written straight to .env — never echoed to stdout.
+          printf "FIREBASE_SERVICE_ACCOUNT_JSON='%s'\n" \
+            "$FIREBASE_SERVICE_ACCOUNT_JSON_VAL" >> .env
 
           # Each step is time-bounded so no build/install/DB step can hang the
           # deployment. devDeps are required (prisma + nest CLI); local binaries
@@ -225,6 +244,21 @@ jobs:
             exit 1
           fi
           echo "styloai-backend is active and healthy on 127.0.0.1:3000."
+
+          # Prove the backend can actually VERIFY Google/Firebase tokens. Without
+          # the service account, verifyIdToken throws and every real
+          # /v1/auth/google returns 401 — invisible to /health and the 400 probe.
+          # The FirebaseService logs one of these lines on startup (no secrets).
+          if journalctl -u styloai-backend -n 120 --no-pager 2>/dev/null \
+               | grep -q "Firebase Admin initialized."; then
+            echo "[verify] Firebase Admin initialized — token verification ENABLED."
+          elif journalctl -u styloai-backend -n 120 --no-pager 2>/dev/null \
+               | grep -q "FIREBASE_SERVICE_ACCOUNT_JSON not set"; then
+            echo "::error::Firebase Admin NOT configured on the server — /v1/auth/google will reject every real token with 401. Ensure the FIREBASE_SERVICE_ACCOUNT_JSON secret holds the service account for project lifereset-556c7."
+            exit 1
+          else
+            echo "::warning::Could not confirm Firebase Admin init from logs (continuing)."
+          fi
 
           # ============ Nginx TLS reverse proxy for api.souvikpati.in ========
           # Permanent edge: https://api.souvikpati.in -> 127.0.0.1:3000 (NestJS).

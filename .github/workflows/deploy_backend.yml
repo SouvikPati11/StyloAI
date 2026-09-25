@@ -100,9 +100,11 @@ jobs:
           # Run all deployment commands from the backend dir as the ec2-user home.
           cd "$APP_DIR"
           git config --global --add safe.directory /home/ec2-user/StyloAI
-          # timeout + disabled credential helper: a private-repo auth prompt can
-          # never block the deployment; it errors quickly with a clear message.
-          timeout 180 git -c credential.helper= fetch origin claude/happy-cori-w42sa5
+          # GIT_TERMINAL_PROMPT=0 stops any interactive auth prompt and `timeout`
+          # is the hard backstop, so a private-repo auth prompt can never block
+          # the deployment. Any existing working credential (SSH key / stored
+          # token) is left intact and still succeeds.
+          timeout 180 git fetch origin claude/happy-cori-w42sa5
           git checkout claude/happy-cori-w42sa5
           git reset --hard origin/claude/happy-cori-w42sa5
 

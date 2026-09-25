@@ -3,92 +3,227 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>StyloAI Admin</title>
+<meta name="theme-color" content="#0E1626" />
+<title>StyloAI Studio · Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <style>
+  /* StyloAI Studio — the admin console shares the mobile app's dark navy /
+     champagne-gold / ivory identity (tokens mirror mobile/lib/design/tokens.dart
+     dark palette). No purple/plum, no generic dashboard chrome. */
   :root {
-    --ink: #141414; --bg: #faf8f5; --surface: #ffffff; --muted: #6b6560;
-    --line: #e7e2db; --accent: #7c3a4b; --accent-soft: #f3e9ec;
-    --ok: #2f7d5b; --warn: #b0782a; --err: #b3402f; --radius: 14px;
+    --bg: #0E1626;            /* navy canvas (bgDark) */
+    --surface: #182136;       /* card (surfaceDark) */
+    --surface-alt: #212B41;   /* raised (surfaceAltDark) */
+    --line: #2A3247;          /* subtle border (lineDark) */
+    --ink: #F5F0EC;           /* ivory text (inkDark) */
+    --ink-soft: #C3BDB2;      /* secondary (inkSoftDark) */
+    --muted: #8E9099;         /* tertiary (mutedDark) */
+    --accent: #CBA867;        /* champagne gold (accentDark) */
+    --accent-soft: #241E17;   /* gold wash (accentSoftDark) */
+    --ok: #4CAF82; --warn: #D2A24C; --err: #E07A63;
+    --radius: 16px; --radius-sm: 12px; --pill: 999px;
+    --sidebar: 248px;
+    --shadow: 0 10px 30px rgba(0,0,0,.35);
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    color: var(--ink); background: var(--bg); font-size: 15px; line-height: 1.5; }
-  a { color: var(--accent); }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14.5px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
   .hidden { display: none !important; }
-  /* Login */
-  #login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
-  .login-card { width: 100%; max-width: 380px; }
-  .brand { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
-  .brand small { display:block; font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 4px; }
-  label { display:block; font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
-  input, select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line);
-    border-radius: 10px; font-size: 14px; background: #fff; font-family: inherit; }
-  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
-  button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; font-weight: 600;
-    padding: 11px 16px; background: var(--accent); color: #fff; font-family: inherit; }
-  button.secondary { background: var(--accent-soft); color: var(--accent); }
-  button.ghost { background: transparent; color: var(--muted); padding: 6px 10px; }
-  button.danger { background: #fbeae7; color: var(--err); }
-  button:active { transform: translateY(1px); }
-  .full { width: 100%; margin-top: 18px; }
-  .err { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 18px; }
-  /* Shell */
-  header { display:flex; align-items:center; justify-content: space-between; padding: 14px 20px;
-    background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
-  nav { display:flex; gap: 4px; padding: 8px 12px; background: var(--surface); border-bottom: 1px solid var(--line);
-    overflow-x: auto; position: sticky; top: 57px; z-index: 4; }
-  nav button { background: transparent; color: var(--muted); font-weight: 600; padding: 8px 14px; border-radius: 999px; white-space: nowrap; }
-  nav button.active { background: var(--ink); color: #fff; }
-  main { max-width: 1000px; margin: 0 auto; padding: 22px 16px 80px; }
-  h2 { font-size: 20px; letter-spacing: -.01em; margin: 4px 0 16px; }
-  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
-  .stat .n { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
-  .stat .l { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
-  table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
-  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); background: #fbfaf8; }
-  tr:last-child td { border-bottom: none; }
-  .row { display:flex; gap: 10px; flex-wrap: wrap; align-items: end; margin-bottom: 16px; }
-  .row > div { flex: 1; min-width: 140px; }
-  .pill { display:inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
-  .pill.ok { background: #e6f2ec; color: var(--ok); }
-  .pill.warn { background: #f6eddb; color: var(--warn); }
-  .pill.err { background: #fbeae7; color: var(--err); }
+  .serif { font-family: 'Fraunces', Georgia, serif; }
   .muted { color: var(--muted); }
-  .thumb { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; background: var(--line); }
-  .banner { background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 16px; }
-  .flex { display:flex; gap: 8px; align-items: center; }
+  .soft { color: var(--ink-soft); }
+  .gold { color: var(--accent); }
+
+  /* Wordmark */
+  .wordmark { font-family: 'Fraunces', serif; font-weight: 600; letter-spacing: -.02em; }
+  .wordmark .ai { color: var(--accent); }
+  .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+
+  /* Buttons */
+  button { cursor: pointer; font-family: inherit; font-size: 14px; font-weight: 600;
+    border: none; border-radius: var(--radius-sm); padding: 10px 16px;
+    background: var(--accent); color: #1a1206; transition: filter .15s, transform .05s; }
+  button:hover { filter: brightness(1.06); }
+  button:active { transform: translateY(1px); }
+  button.secondary { background: var(--surface-alt); color: var(--ink); border: 1px solid var(--line); }
+  button.ghost { background: transparent; color: var(--ink-soft); padding: 8px 12px; border: 1px solid transparent; }
+  button.ghost:hover { border-color: var(--line); filter: none; }
+  button.danger { background: transparent; color: var(--err); border: 1px solid rgba(224,122,99,.4); }
+  button.danger:hover { background: rgba(224,122,99,.1); filter: none; }
+  button.icon { padding: 7px 10px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Inputs */
+  label { display: block; font-size: 12.5px; color: var(--ink-soft); margin: 0 0 6px; font-weight: 500; }
+  input, select, textarea {
+    width: 100%; padding: 11px 13px; border: 1px solid var(--line);
+    border-radius: var(--radius-sm); font-size: 14px; background: var(--bg);
+    color: var(--ink); font-family: inherit; }
+  input::placeholder, textarea::placeholder { color: var(--muted); }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  select option { background: var(--surface); color: var(--ink); }
+  input[type=file] { padding: 8px; }
+
+  /* Login */
+  #login { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px;
+    background: radial-gradient(1100px 600px at 70% -10%, #14203a 0%, var(--bg) 55%); }
+  .login-card { width: 100%; max-width: 400px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 34px 30px; box-shadow: var(--shadow); }
+  .login-card .brand { font-size: 26px; }
+  .login-card .eyebrow { margin: 6px 0 22px; }
+
+  /* App shell */
+  #app { display: grid; grid-template-columns: var(--sidebar) 1fr; min-height: 100vh; }
+  aside { background: var(--surface); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+  .side-brand { padding: 20px 22px 16px; font-size: 21px; display:flex; align-items:center; gap: 10px; }
+  .side-logo { width: 30px; height: 30px; border-radius: 9px; object-fit: cover; background: var(--surface-alt); }
+  .side-nav { flex: 1; overflow-y: auto; padding: 6px 12px 12px; }
+  .nav-group { font-size: 10.5px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 16px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+    background: transparent; color: var(--ink-soft); border: none; border-radius: 10px;
+    padding: 10px 12px; font-weight: 500; font-size: 14px; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--surface-alt); filter: none; color: var(--ink); }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav-item .ico { width: 18px; text-align: center; font-size: 15px; opacity: .9; }
+  .side-foot { padding: 12px; border-top: 1px solid var(--line); }
+  .side-foot .who { font-size: 12.5px; color: var(--muted); padding: 4px 12px 10px; word-break: break-all; }
+
+  main { min-width: 0; }
+  .topbar { display: none; align-items: center; gap: 12px; padding: 12px 16px;
+    background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 8; }
+  .content { max-width: 1080px; margin: 0 auto; padding: 30px 24px 90px; }
+  .page-head { margin-bottom: 22px; }
+  .page-head h1 { font-family: 'Fraunces', serif; font-weight: 600; font-size: 27px; margin: 4px 0 0; letter-spacing: -.01em; }
+  .page-head p { color: var(--muted); margin: 6px 0 0; font-size: 13.5px; }
+
+  /* Cards & layout */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 20px; box-shadow: 0 1px 0 rgba(255,255,255,.02); }
+  .card + .card { margin-top: 16px; }
+  .stat-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 18px 16px; }
+  .stat .n { font-family: 'Fraunces', serif; font-size: 30px; font-weight: 600; letter-spacing: -.01em; }
+  .stat .l { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; margin-top: 6px; }
+  .stat.accent .n { color: var(--accent); }
+
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .row > div { flex: 1; min-width: 150px; }
+  .row > div.tight { flex: 0 0 auto; min-width: 0; }
+  .section-title { font-family:'Fraunces',serif; font-size: 18px; font-weight: 600; margin: 28px 0 14px; }
+  .flex { display: flex; gap: 10px; align-items: center; }
   .spacer { flex: 1; }
-  .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .2s; z-index: 20; }
-  .toast.show { opacity: 1; }
+  .wrap { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+
+  /* Tables */
+  .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--line); font-size: 13.5px; vertical-align: middle; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); background: var(--surface-alt); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,.015); }
+  td .sub { color: var(--muted); font-size: 12px; }
+
+  .pill { display:inline-block; padding: 3px 11px; border-radius: var(--pill); font-size: 11.5px; font-weight: 600; letter-spacing: .01em; }
+  .pill.ok { background: rgba(76,175,130,.15); color: var(--ok); }
+  .pill.warn { background: rgba(210,162,76,.15); color: var(--warn); }
+  .pill.err { background: rgba(224,122,99,.15); color: var(--err); }
+  .pill.neutral { background: var(--surface-alt); color: var(--ink-soft); }
+  .thumb { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; background: var(--surface-alt); border: 1px solid var(--line); }
+
+  .banner { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(203,168,103,.25);
+    border-radius: var(--radius-sm); padding: 11px 15px; font-size: 13px; margin-bottom: 18px; }
+  .err-text { color: var(--err); font-size: 13px; margin-top: 10px; min-height: 16px; }
+
+  /* States */
+  .state { text-align: center; padding: 46px 20px; color: var(--muted); }
+  .state .ico { font-size: 30px; opacity: .5; }
+  .state .t { color: var(--ink-soft); font-weight: 600; margin-top: 12px; }
+  .state .s { font-size: 13px; margin-top: 5px; }
+  .spinner { width: 26px; height: 26px; border-radius: 50%; border: 2.6px solid var(--line);
+    border-top-color: var(--accent); animation: spin .8s linear infinite; margin: 0 auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Bars */
+  .bar-row { display: grid; grid-template-columns: 110px 1fr 44px; align-items: center; gap: 12px; margin: 9px 0; }
+  .bar-track { background: var(--surface-alt); border-radius: var(--pill); height: 9px; overflow: hidden; }
+  .bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #e0c187); border-radius: var(--pill); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%) translateY(12px);
+    background: var(--ink); color: var(--bg); padding: 11px 20px; border-radius: var(--pill);
+    font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: all .25s; z-index: 60; box-shadow: var(--shadow); }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.err { background: var(--err); color: #fff; }
+
+  /* Modal */
+  .modal-back { position: fixed; inset: 0; background: rgba(6,10,20,.66); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+  .modal { width: 100%; max-width: 520px; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 24px; box-shadow: var(--shadow); max-height: 90vh; overflow-y: auto; }
+  .modal h3 { font-family:'Fraunces',serif; font-weight: 600; margin: 0 0 16px; font-size: 20px; }
+
+  .pagination { display: flex; gap: 10px; align-items: center; justify-content: flex-end; margin-top: 14px; color: var(--muted); font-size: 13px; }
+
+  /* Responsive */
+  .hamburger { display: none; }
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; }
+    aside { position: fixed; z-index: 30; width: min(84vw, var(--sidebar)); transform: translateX(-100%);
+      transition: transform .22s ease; box-shadow: var(--shadow); }
+    aside.open { transform: translateX(0); }
+    .topbar { display: flex; }
+    .hamburger { display: inline-flex; }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 25; }
+    .content { padding: 20px 16px 90px; }
+    .page-head h1 { font-size: 23px; }
+  }
 </style>
 </head>
 <body>
   <!-- LOGIN -->
   <div id="login">
-    <div class="card login-card">
-      <div class="brand">StyloAI <small>Admin Console</small></div>
+    <form class="login-card" onsubmit="event.preventDefault(); login();">
+      <div class="brand wordmark">Stylo<span class="ai">AI</span></div>
+      <div class="eyebrow">Studio · Admin Control Center</div>
       <label for="email">Email</label>
       <input id="email" type="email" autocomplete="username" placeholder="admin@stylo.app" />
-      <label for="password">Password</label>
+      <label for="password" style="margin-top:14px">Password</label>
       <input id="password" type="password" autocomplete="current-password" />
-      <button class="full" onclick="login()">Sign in</button>
-      <div class="err" id="loginErr"></div>
-    </div>
+      <button class="full" style="width:100%; margin-top:20px" type="submit">Sign in</button>
+      <div class="err-text" id="loginErr"></div>
+    </form>
   </div>
 
   <!-- SHELL -->
   <div id="app" class="hidden">
-    <header>
-      <div class="brand">StyloAI <small>Admin</small></div>
-      <div class="flex"><span class="muted" id="whoami"></span><button class="ghost" onclick="logout()">Log out</button></div>
-    </header>
-    <nav id="nav"></nav>
-    <main id="view"></main>
+    <div id="scrim" class="hidden" onclick="toggleSidebar(false)"></div>
+    <aside id="sidebar">
+      <div class="side-brand">
+        <img class="side-logo" src="/admin/logo.png" onerror="this.style.display='none'" alt="" />
+        <span class="wordmark">Stylo<span class="ai">AI</span></span>
+      </div>
+      <nav class="side-nav" id="nav"></nav>
+      <div class="side-foot">
+        <div class="who" id="whoami"></div>
+        <button class="ghost" style="width:100%" onclick="logout()">Log out</button>
+      </div>
+    </aside>
+    <main>
+      <div class="topbar">
+        <button class="ghost hamburger icon" onclick="toggleSidebar(true)">☰</button>
+        <span class="wordmark" style="font-size:18px">Stylo<span class="ai">AI</span> <span class="muted" style="font-family:Inter;font-size:13px">Studio</span></span>
+      </div>
+      <div class="content" id="view"></div>
+    </main>
   </div>
   <div class="toast" id="toast"></div>
 
@@ -96,22 +231,45 @@
 const API = location.origin + '/v1';
 let TOKEN = localStorage.getItem('stylo_admin_token') || '';
 let ADMIN = JSON.parse(localStorage.getItem('stylo_admin') || 'null');
-const TABS = ['Dashboard','Content','Categories','Users','Settings'];
+
+// Sidebar: only pages backed by real API functionality.
+const NAV = [
+  { group: null, items: [ ['Dashboard','◧'] ] },
+  { group: 'Content', items: [ ['Trending Styles','✦'], ['Categories','▦'] ] },
+  { group: 'People & activity', items: [ ['Users','◍'], ['Generations','❖'], ['Credits','◈'] ] },
+  { group: 'System', items: [ ['Settings','⚙'], ['System Health','♥'] ] },
+];
 let currentTab = 'Dashboard';
 
-function toast(msg){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1800); }
+const SECTIONS = ['outfit','hair','glasses','accessories','pose','ai_edit','inspiration'];
+const GEN_STATUSES = ['queued','processing','succeeded','failed','refunded'];
+const GEN_TYPES = ['outfit','hair','glasses','accessories','pose','ai_edit'];
+const TXN_TYPES = ['signup_bonus','admin_grant','purchase','generation_hold','generation_settle','generation_refund','promo'];
+
+/* ---------- helpers ---------- */
+function esc(s){ return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function toast(msg, isErr){ const t=document.getElementById('toast'); t.textContent=msg; t.className='toast show'+(isErr?' err':''); setTimeout(()=>t.className='toast',2000); }
+function fmtDate(x){ if(!x) return '—'; const d=new Date(x); return isNaN(d)?'—':d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+function fmtDateTime(x){ if(!x) return '—'; const d=new Date(x); return isNaN(d)?'—':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
+const view = () => document.getElementById('view');
+function loadingHTML(msg){ return `<div class="state"><div class="spinner"></div><div class="t">${esc(msg||'Loading…')}</div></div>`; }
+function emptyHTML(ico,t,s){ return `<div class="state"><div class="ico">${ico||'∅'}</div><div class="t">${esc(t)}</div>${s?`<div class="s">${esc(s)}</div>`:''}</div>`; }
+function errorHTML(msg,retry){ return `<div class="state"><div class="ico">⚠</div><div class="t">Something went wrong</div><div class="s">${esc(msg)}</div>${retry?`<div style="margin-top:16px"><button class="secondary" onclick="${retry}">Try again</button></div>`:''}</div>`; }
+function statusPill(s){ const ok=['succeeded','committed','granted','active','verified'],warn=['queued','processing','pending'],err=['failed','reversed','invalid','suspended','deleted','refunded'];
+  const c = ok.includes(s)?'ok':warn.includes(s)?'warn':err.includes(s)?'err':'neutral'; return `<span class="pill ${c}">${esc(s)}</span>`; }
 
 async function api(path, opts={}) {
   const res = await fetch(API + path, {
     ...opts,
-    headers: { 'Content-Type':'application/json', ...(TOKEN?{Authorization:'Bearer '+TOKEN}:{}) , ...(opts.headers||{}) },
+    headers: { 'Content-Type':'application/json', ...(TOKEN?{Authorization:'Bearer '+TOKEN}:{}), ...(opts.headers||{}) },
   });
-  if (res.status === 401) { logout(); throw new Error('Session expired'); }
+  if (res.status === 401) { logout(); throw new Error('Session expired — please sign in again.'); }
   const body = await res.json().catch(()=>({}));
   if (!res.ok) throw new Error(body?.error?.message || ('Request failed ('+res.status+')'));
   return body;
 }
 
+/* ---------- auth ---------- */
 async function login() {
   const email = document.getElementById('email').value.trim();
   const password = document.getElementById('password').value;
@@ -127,167 +285,383 @@ async function login() {
 function logout(){ TOKEN=''; ADMIN=null; localStorage.removeItem('stylo_admin_token'); localStorage.removeItem('stylo_admin');
   document.getElementById('app').classList.add('hidden'); document.getElementById('login').classList.remove('hidden'); }
 
+function toggleSidebar(open){
+  const sb=document.getElementById('sidebar'), sc=document.getElementById('scrim');
+  if(open){ sb.classList.add('open'); sc.classList.remove('hidden'); }
+  else { sb.classList.remove('open'); sc.classList.add('hidden'); }
+}
+
 function boot(){
   document.getElementById('login').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
-  document.getElementById('whoami').textContent = ADMIN ? ADMIN.email : '';
+  document.getElementById('whoami').textContent = ADMIN ? (ADMIN.email + ' · ' + ADMIN.role) : '';
   const nav = document.getElementById('nav'); nav.innerHTML='';
-  TABS.forEach(t=>{ const b=document.createElement('button'); b.textContent=t; b.className=(t===currentTab?'active':'');
-    b.onclick=()=>{currentTab=t; boot();}; nav.appendChild(b); });
+  NAV.forEach(sec=>{
+    if(sec.group){ const g=document.createElement('div'); g.className='nav-group'; g.textContent=sec.group; nav.appendChild(g); }
+    sec.items.forEach(([name,ico])=>{
+      const b=document.createElement('button'); b.className='nav-item'+(name===currentTab?' active':'');
+      b.innerHTML=`<span class="ico">${ico}</span><span>${name}</span>`;
+      b.onclick=()=>{ currentTab=name; toggleSidebar(false); boot(); };
+      nav.appendChild(b);
+    });
+  });
   render();
 }
 
-const view = () => document.getElementById('view');
-function esc(s){ return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-
 async function render(){
-  const v = view(); v.innerHTML = '<p class="muted">Loading…</p>';
-  try {
-    if (currentTab==='Dashboard') return renderDashboard(v);
-    if (currentTab==='Content') return renderContent(v);
-    if (currentTab==='Categories') return renderCategories(v);
-    if (currentTab==='Users') return renderUsers(v);
-    if (currentTab==='Settings') return renderSettings(v);
-  } catch(e){ v.innerHTML = '<div class="banner">'+esc(e.message)+'</div>'; }
+  const v = view(); v.innerHTML = loadingHTML();
+  const map = { 'Dashboard':renderDashboard, 'Trending Styles':renderTrending, 'Categories':renderCategories,
+    'Users':renderUsers, 'Generations':renderGenerations, 'Credits':renderTransactions,
+    'Settings':renderSettings, 'System Health':renderHealth };
+  const fn = map[currentTab] || renderDashboard;
+  try { await fn(v); }
+  catch(e){ v.innerHTML = errorHTML(e.message, 'render()'); }
 }
 
+/* ---------- Dashboard ---------- */
 async function renderDashboard(v){
   const s = await api('/admin/stats');
   const g = s.generations || {};
-  const byType = (s.generations_by_type||[]).map(x=>`<tr><td>${esc(x.type)}</td><td>${x.count}</td></tr>`).join('');
-  v.innerHTML = `<h2>Dashboard</h2>
-    <div class="grid">
-      <div class="stat"><div class="n">${s.users??0}</div><div class="l">Users</div></div>
-      <div class="stat"><div class="n">${g.total??0}</div><div class="l">Generations</div></div>
-      <div class="stat"><div class="n">${g.succeeded??0}</div><div class="l">Succeeded</div></div>
-      <div class="stat"><div class="n">${g.failed??0}</div><div class="l">Failed</div></div>
-      <div class="stat"><div class="n">${s.purchases_granted??0}</div><div class="l">Purchases</div></div>
+  const stat = (n,l,accent)=>`<div class="stat${accent?' accent':''}"><div class="n">${n??0}</div><div class="l">${l}</div></div>`;
+  const types = s.generations_by_type||[];
+  const max = Math.max(1, ...types.map(t=>t.count));
+  const bars = types.length ? types.map(t=>`<div class="bar-row"><span class="muted" style="font-size:13px">${esc(t.type)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.round(t.count/max*100)}%"></div></div>
+      <span style="text-align:right;font-weight:600">${t.count}</span></div>`).join('') : emptyHTML('❖','No generations yet','Activity appears here as users create looks.');
+  const recent = (s.recent_users||[]);
+  const recentRows = recent.length ? recent.map(u=>`<tr>
+      <td><strong>${esc(u.display_name||'—')}</strong><div class="sub">${esc(u.email||'')}</div></td>
+      <td>${statusPill(u.status)}</td><td>${u.balance}</td><td class="muted">${fmtDate(u.created_at)}</td></tr>`).join('')
+    : '<tr><td colspan="4"><div class="state" style="padding:26px"><div class="t">No signups yet</div></div></td></tr>';
+
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Overview</div><h1>Dashboard</h1><p>Live metrics from the production database.</p></div>
+    <div class="stat-grid">
+      ${stat(s.users,'Total users')}
+      ${stat(s.active_users,'Active (30d)', true)}
+      ${stat(s.recent_signups,'New (7d)')}
+      ${stat(g.total,'Generations')}
+      ${stat(g.succeeded,'Succeeded')}
+      ${stat(g.failed,'Failed')}
+      ${stat(g.in_progress,'In progress')}
+      ${stat(s.credits_used,'Credits used', true)}
+      ${stat(s.purchases_granted,'Purchases')}
     </div>
-    <h2 style="margin-top:28px">Generations by type</h2>
-    <table><thead><tr><th>Type</th><th>Count</th></tr></thead><tbody>${byType||'<tr><td colspan=2 class=muted>No data yet</td></tr>'}</tbody></table>`;
+    <div class="section-title">Generations by type</div>
+    <div class="card">${bars}</div>
+    <div class="section-title">Recent signups</div>
+    <div class="table-wrap"><table><thead><tr><th>User</th><th>Status</th><th>Credits</th><th>Joined</th></tr></thead>
+      <tbody>${recentRows}</tbody></table></div>`;
 }
 
-async function renderContent(v){
-  const items = await api('/admin/trending');
-  const rows = items.map(i=>`<tr>
-    <td><img class="thumb" src="${esc(i.image_url)}" onerror="this.style.opacity=.3"/></td>
-    <td><strong>${esc(i.title)}</strong><br><span class="muted">${esc(i.subtitle||'')}</span></td>
-    <td>${esc(i.section)}</td><td>${esc(i.presetKey||'')}</td>
+/* ---------- Trending ---------- */
+let trendFilter = '';
+async function renderTrending(v){
+  const q = trendFilter ? '?section='+encodeURIComponent(trendFilter) : '';
+  const items = await api('/admin/trending'+q);
+  const secOpts = ['<option value="">All sections</option>'].concat(SECTIONS.map(s=>`<option ${s===trendFilter?'selected':''}>${s}</option>`)).join('');
+  const rows = items.map((i,idx)=>`<tr>
+    <td><img class="thumb" src="${esc(i.image_url)}" onerror="this.style.opacity=.25" alt=""/></td>
+    <td><strong>${esc(i.title)}</strong><div class="sub">${esc(i.subtitle||'')}</div></td>
+    <td><span class="pill neutral">${esc(i.section)}</span></td>
+    <td class="muted">${esc(i.presetKey||i.preset_key||'—')}</td>
     <td>${i.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
-    <td><button class="danger" onclick="delTrending('${i.id}')">Delete</button></td></tr>`).join('');
-  v.innerHTML = `<h2>Trending content</h2>
-    <div class="banner">Changes here appear in the app immediately — no release needed.</div>
+    <td class="muted">${i.position??0}</td>
+    <td><div class="btn-row">
+      <button class="ghost icon" title="Move up" onclick='moveTrending(${JSON.stringify(i.id)},-1)'>↑</button>
+      <button class="ghost icon" title="Move down" onclick='moveTrending(${JSON.stringify(i.id)},1)'>↓</button>
+      <button class="secondary icon" title="${i.isActive?'Hide':'Publish'}" onclick='toggleTrending(${JSON.stringify(i.id)},${!i.isActive})'>${i.isActive?'Hide':'Publish'}</button>
+      <button class="secondary icon" onclick='editTrending(${JSON.stringify(i)})'>Edit</button>
+      <button class="danger icon" onclick='delTrending(${JSON.stringify(i.id)})'>Delete</button>
+    </div></td></tr>`).join('');
+
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Content</div><h1>Trending Styles</h1><p>Publish curated styles to the app — changes appear instantly, no release needed.</p></div>
+    <div class="banner">Published styles surface in the app's <strong>Trending now</strong> and Explore. Hidden styles are kept but not shown.</div>
     <div class="card" style="margin-bottom:18px">
       <div class="row">
-        <div><label>Section</label><select id="c_section">${['outfit','hair','glasses','accessories','pose','ai_edit','inspiration'].map(s=>`<option>${s}</option>`).join('')}</select></div>
-        <div><label>Title</label><input id="c_title"/></div>
-        <div><label>Subtitle</label><input id="c_subtitle"/></div>
+        <div class="tight" style="min-width:170px"><label>Section</label><select id="c_section">${SECTIONS.map(s=>`<option>${s}</option>`).join('')}</select></div>
+        <div><label>Title</label><input id="c_title" placeholder="Autumn Editorial"/></div>
+        <div><label>Subtitle (optional)</label><input id="c_subtitle" placeholder="Warm tailored layers"/></div>
       </div>
-      <div class="row">
+      <div class="row" style="margin-top:12px">
         <div><label>Preset key (optional)</label><input id="c_preset" placeholder="streetwear"/></div>
+        <div><label>Position</label><input id="c_position" type="number" value="0" min="0"/></div>
         <div><label>Image</label><input id="c_file" type="file" accept="image/*"/></div>
-        <div style="flex:0"><label>&nbsp;</label><button onclick="createTrending()">Add</button></div>
+        <div class="tight"><label>&nbsp;</label><button id="c_add" onclick="createTrending()">Publish style</button></div>
       </div>
-      <div class="err" id="c_err"></div>
+      <div class="err-text" id="c_err"></div>
     </div>
-    <table><thead><tr><th></th><th>Title</th><th>Section</th><th>Preset</th><th>Status</th><th></th></tr></thead>
-    <tbody>${rows||'<tr><td colspan=6 class=muted>No trending content yet</td></tr>'}</tbody></table>`;
+    <div class="wrap" style="margin-bottom:14px"><div style="max-width:220px"><label>Filter by section</label>
+      <select onchange="trendFilter=this.value; render();">${secOpts}</select></div></div>
+    ${items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th></th><th>Title</th><th>Section</th><th>Preset</th><th>Status</th><th>Pos</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : emptyHTML('✦','No trending styles yet','Publish your first style above to feature it in the app.')}`;
 }
-
 async function uploadImage(file){
   const p = await api('/admin/media/presign', { method:'POST', body: JSON.stringify({ content_type: file.type }) });
-  await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
+  const put = await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
+  if(!put.ok) throw new Error('Image upload failed ('+put.status+')');
   return p.s3_key;
 }
 async function createTrending(){
   const err = document.getElementById('c_err'); err.textContent='';
+  const btn = document.getElementById('c_add'); btn.disabled=true; btn.textContent='Publishing…';
   try {
     const file = document.getElementById('c_file').files[0];
-    if(!file){ err.textContent='Please choose an image.'; return; }
+    const title = document.getElementById('c_title').value.trim();
+    if(!title){ throw new Error('Please enter a title.'); }
+    if(!file){ throw new Error('Please choose an image.'); }
     const key = await uploadImage(file);
     await api('/admin/trending', { method:'POST', body: JSON.stringify({
       section: document.getElementById('c_section').value,
-      title: document.getElementById('c_title').value,
+      title,
       subtitle: document.getElementById('c_subtitle').value || undefined,
       preset_key: document.getElementById('c_preset').value || undefined,
+      position: parseInt(document.getElementById('c_position').value,10) || 0,
       image_s3_key: key,
     })});
-    toast('Added'); render();
+    toast('Style published'); render();
   } catch(e){ err.textContent = e.message; }
+  finally { btn.disabled=false; btn.textContent='Publish style'; }
 }
-async function delTrending(id){ if(!confirm('Delete this item?'))return; await api('/admin/trending/'+id,{method:'DELETE'}); toast('Deleted'); render(); }
+async function toggleTrending(id, active){ try{ await api('/admin/trending/'+id,{method:'PUT',body:JSON.stringify({is_active:active})}); toast(active?'Published':'Hidden'); render(); }catch(e){ toast(e.message,true); } }
+async function moveTrending(id, delta){
+  try{ const list = await api('/admin/trending'); const it = list.find(x=>x.id===id); if(!it) return;
+    const pos = Math.max(0,(it.position??0)+delta); await api('/admin/trending/'+id,{method:'PUT',body:JSON.stringify({position:pos})}); render();
+  }catch(e){ toast(e.message,true); } }
+async function delTrending(id){ if(!confirm('Delete this style? This cannot be undone.'))return; try{ await api('/admin/trending/'+id,{method:'DELETE'}); toast('Deleted'); render(); }catch(e){ toast(e.message,true); } }
 
+function editTrending(i){
+  openModal(`<h3>Edit style</h3>
+    <label>Title</label><input id="e_title" value="${esc(i.title)}"/>
+    <label style="margin-top:12px">Subtitle</label><input id="e_subtitle" value="${esc(i.subtitle||'')}"/>
+    <label style="margin-top:12px">Section</label><select id="e_section">${SECTIONS.map(s=>`<option ${s===i.section?'selected':''}>${s}</option>`).join('')}</select>
+    <label style="margin-top:12px">Preset key</label><input id="e_preset" value="${esc(i.presetKey||i.preset_key||'')}"/>
+    <label style="margin-top:12px">Position</label><input id="e_position" type="number" value="${i.position??0}" min="0"/>
+    <label style="margin-top:12px">Replace image (optional)</label><input id="e_file" type="file" accept="image/*"/>
+    <div class="err-text" id="e_err"></div>
+    <div class="btn-row" style="margin-top:18px;justify-content:flex-end"><button class="ghost" onclick="closeModal()">Cancel</button>
+      <button id="e_save" onclick='saveTrending(${JSON.stringify(i.id)})'>Save changes</button></div>`);
+}
+async function saveTrending(id){
+  const err=document.getElementById('e_err'); err.textContent='';
+  const btn=document.getElementById('e_save'); btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const body = { title:document.getElementById('e_title').value.trim(), subtitle:document.getElementById('e_subtitle').value,
+      section:document.getElementById('e_section').value, preset_key:document.getElementById('e_preset').value,
+      position: parseInt(document.getElementById('e_position').value,10)||0 };
+    const file=document.getElementById('e_file').files[0];
+    if(file){ body.image_s3_key = await uploadImage(file); }
+    await api('/admin/trending/'+id,{method:'PUT',body:JSON.stringify(body)});
+    closeModal(); toast('Saved'); render();
+  }catch(e){ err.textContent=e.message; btn.disabled=false; btn.textContent='Save changes'; }
+}
+
+/* ---------- Categories ---------- */
 async function renderCategories(v){
   const items = await api('/admin/categories');
-  const rows = items.map(c=>`<tr><td>${esc(c.section)}</td><td>${esc(c.key)}</td><td>${esc(c.label)}</td>
+  const rows = items.map(c=>`<tr>
+    <td><span class="pill neutral">${esc(c.section)}</span></td>
+    <td><code style="color:var(--ink-soft)">${esc(c.key)}</code></td>
+    <td><strong>${esc(c.label)}</strong></td>
+    <td class="muted">${c.sortOrder??0}</td>
     <td>${c.isActive?'<span class="pill ok">active</span>':'<span class="pill err">off</span>'}</td>
-    <td><button class="danger" onclick="delCat('${c.id}')">Delete</button></td></tr>`).join('');
-  v.innerHTML = `<h2>Categories</h2>
+    <td><div class="btn-row">
+      <button class="secondary icon" onclick='toggleCat(${JSON.stringify(c)})'>${c.isActive?'Disable':'Enable'}</button>
+      <button class="danger icon" onclick='delCat(${JSON.stringify(c.id)})'>Delete</button>
+    </div></td></tr>`).join('');
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Content</div><h1>Categories</h1><p>Category labels used by the app's Create & Explore sections. Labels here appear verbatim in the app.</p></div>
     <div class="card" style="margin-bottom:18px"><div class="row">
-      <div><label>Section</label><select id="cat_section">${['outfit','hair','glasses','accessories','pose','ai_edit'].map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div class="tight" style="min-width:160px"><label>Section</label><select id="cat_section">${GEN_TYPES.map(s=>`<option>${s}</option>`).join('')}</select></div>
       <div><label>Key</label><input id="cat_key" placeholder="streetwear"/></div>
-      <div><label>Label</label><input id="cat_label" placeholder="Streetwear"/></div>
-      <div style="flex:0"><label>&nbsp;</label><button onclick="createCat()">Add</button></div>
-    </div><div class="err" id="cat_err"></div></div>
-    <table><thead><tr><th>Section</th><th>Key</th><th>Label</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      <div><label>Label (shown in app)</label><input id="cat_label" placeholder="Streetwear"/></div>
+      <div><label>Sort order</label><input id="cat_order" type="number" value="0" min="0"/></div>
+      <div class="tight"><label>&nbsp;</label><button id="cat_add" onclick="createCat()">Add / update</button></div>
+    </div><div class="err-text" id="cat_err"></div></div>
+    ${items.length ? `<div class="table-wrap"><table><thead><tr><th>Section</th><th>Key</th><th>Label</th><th>Order</th><th>Status</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : emptyHTML('▦','No categories yet','Add a category to organize app content.')}`;
 }
 async function createCat(){ const err=document.getElementById('cat_err'); err.textContent='';
-  try{ await api('/admin/categories',{method:'POST',body:JSON.stringify({
-    section:document.getElementById('cat_section').value, key:document.getElementById('cat_key').value, label:document.getElementById('cat_label').value })});
-    toast('Saved'); render(); }catch(e){ err.textContent=e.message; } }
-async function delCat(id){ if(!confirm('Delete category?'))return; await api('/admin/categories/'+id,{method:'DELETE'}); toast('Deleted'); render(); }
+  const btn=document.getElementById('cat_add'); btn.disabled=true;
+  try{ const key=document.getElementById('cat_key').value.trim(), label=document.getElementById('cat_label').value.trim();
+    if(!key||!label) throw new Error('Key and label are required.');
+    await api('/admin/categories',{method:'POST',body:JSON.stringify({ section:document.getElementById('cat_section').value,
+      key, label, sort_order: parseInt(document.getElementById('cat_order').value,10)||0 })});
+    toast('Saved'); render(); }catch(e){ err.textContent=e.message; btn.disabled=false; } }
+async function toggleCat(c){ try{ await api('/admin/categories',{method:'POST',body:JSON.stringify({
+    section:c.section, key:c.key, label:c.label, sort_order:c.sortOrder??0, is_active:!c.isActive })}); toast(c.isActive?'Disabled':'Enabled'); render(); }catch(e){ toast(e.message,true); } }
+async function delCat(id){ if(!confirm('Delete this category?'))return; try{ await api('/admin/categories/'+id,{method:'DELETE'}); toast('Deleted'); render(); }catch(e){ toast(e.message,true); } }
 
+/* ---------- Users ---------- */
 async function renderUsers(v){
-  v.innerHTML = `<h2>Users</h2>
-    <div class="row"><div><label>Search by email or name</label><input id="u_q" onkeydown="if(event.key==='Enter')searchUsers()"/></div>
-    <div style="flex:0"><label>&nbsp;</label><button onclick="searchUsers()">Search</button></div></div>
-    <div id="u_results"><p class="muted">Enter a query to search users.</p></div>`;
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">People</div><h1>Users</h1><p>Search accounts, review activity, and grant credits.</p></div>
+    <div class="card" style="margin-bottom:18px"><div class="row">
+      <div><label>Search by email or name</label><input id="u_q" placeholder="jane@example.com" onkeydown="if(event.key==='Enter')searchUsers()"/></div>
+      <div class="tight"><label>&nbsp;</label><button onclick="searchUsers()">Search</button></div></div></div>
+    <div id="u_results"></div>`;
+  searchUsers();
 }
 async function searchUsers(){
-  const q = document.getElementById('u_q').value.trim();
-  const el = document.getElementById('u_results'); el.innerHTML='<p class="muted">Searching…</p>';
-  const rows = await api('/admin/users?q='+encodeURIComponent(q));
-  el.innerHTML = `<table><thead><tr><th>Email</th><th>Name</th><th>Balance</th><th>Status</th><th></th></tr></thead><tbody>${
-    rows.map(u=>`<tr><td>${esc(u.email||'')}</td><td>${esc(u.display_name||'')}</td><td>${u.balance}</td>
-      <td>${esc(u.status)}</td><td><button class="secondary" onclick="viewUser('${u.id}')">Open</button></td></tr>`).join('') || '<tr><td colspan=5 class=muted>No users found</td></tr>'}</tbody></table>`;
+  const q = (document.getElementById('u_q')||{}).value?.trim()||'';
+  const el = document.getElementById('u_results'); el.innerHTML = loadingHTML('Loading users…');
+  try {
+    const rows = await api('/admin/users?q='+encodeURIComponent(q)+'&limit=50');
+    el.innerHTML = rows.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>Email</th><th>Name</th><th>Credits</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+      <tbody>${rows.map(u=>`<tr><td>${esc(u.email||'—')}</td><td>${esc(u.display_name||'—')}</td>
+        <td>${u.balance}</td><td>${statusPill(u.status)}</td><td class="muted">${fmtDate(u.created_at)}</td>
+        <td><button class="secondary icon" onclick='viewUser(${JSON.stringify(u.id)})'>Open</button></td></tr>`).join('')}</tbody></table></div>`
+      : emptyHTML('◍', q?'No users match your search':'No users yet', q?'Try a different email or name.':'');
+  } catch(e){ el.innerHTML = errorHTML(e.message, 'searchUsers()'); }
 }
 async function viewUser(id){
-  const el = document.getElementById('u_results'); el.innerHTML='<p class="muted">Loading…</p>';
-  const u = await api('/admin/users/'+id);
-  const txns = u.transactions.map(t=>`<tr><td>${t.amount>0?'+':''}${t.amount}</td><td>${esc(t.type)}</td><td>${esc(t.status)}</td><td class="muted">${esc(t.note||'')}</td></tr>`).join('');
-  const gens = u.generations.map(g=>`<tr><td>${esc(g.type)}</td><td>${esc(g.status)}</td><td>${g.credit_cost}</td></tr>`).join('');
-  el.innerHTML = `<button class="ghost" onclick="searchUsers()">&larr; Back</button>
-    <div class="card" style="margin:12px 0"><div class="flex"><div><strong>${esc(u.display_name||'—')}</strong><br><span class="muted">${esc(u.email||'')}</span></div>
-    <div class="spacer"></div><div style="text-align:right"><div class="stat" style="padding:10px 14px"><div class="n">${u.balance}</div><div class="l">Credits</div></div></div></div>
-    <div class="row" style="margin-top:14px"><div><label>Grant credits</label><input id="g_amt" type="number" min="1" placeholder="50"/></div>
-    <div><label>Reason</label><input id="g_note" placeholder="Promo"/></div>
-    <div style="flex:0"><label>&nbsp;</label><button onclick="grant('${id}')">Grant</button></div></div><div class="err" id="g_err"></div></div>
-    <h2>Transactions</h2><table><thead><tr><th>Amount</th><th>Type</th><th>Status</th><th>Note</th></tr></thead><tbody>${txns||'<tr><td colspan=4 class=muted>None</td></tr>'}</tbody></table>
-    <h2 style="margin-top:22px">Recent generations</h2><table><thead><tr><th>Type</th><th>Status</th><th>Cost</th></tr></thead><tbody>${gens||'<tr><td colspan=3 class=muted>None</td></tr>'}</tbody></table>`;
+  const el = document.getElementById('u_results'); el.innerHTML = loadingHTML('Loading profile…');
+  try {
+    const u = await api('/admin/users/'+id);
+    const txns = (u.transactions||[]).map(t=>`<tr><td style="font-weight:600;color:${t.amount>=0?'var(--ok)':'var(--err)'}">${t.amount>0?'+':''}${t.amount}</td>
+      <td>${esc(t.type)}</td><td>${statusPill(t.status)}</td><td class="muted">${esc(t.note||'—')}</td><td class="muted">${fmtDateTime(t.created_at)}</td></tr>`).join('');
+    const gens = (u.generations||[]).map(g=>`<tr><td>${esc(g.type)}</td><td>${statusPill(g.status)}</td><td>${g.credit_cost}</td><td class="muted">${fmtDateTime(g.created_at)}</td></tr>`).join('');
+    el.innerHTML = `<button class="ghost" onclick="searchUsers()">← Back to results</button>
+      <div class="card" style="margin:12px 0"><div class="wrap">
+        <div><div class="serif" style="font-size:20px;font-weight:600">${esc(u.display_name||'—')}</div><div class="muted">${esc(u.email||'')}</div>
+          <div class="muted" style="font-size:12.5px;margin-top:4px">Joined ${fmtDate(u.created_at)} · ${statusPill(u.status)}</div></div>
+        <div class="spacer"></div>
+        <div class="stat" style="min-width:130px"><div class="n gold">${u.balance}</div><div class="l">Credits</div></div>
+        <div class="stat" style="min-width:130px"><div class="n">${u.lifetime_earned??0}</div><div class="l">Lifetime earned</div></div>
+        <div class="stat" style="min-width:130px"><div class="n">${u.lifetime_spent??0}</div><div class="l">Lifetime spent</div></div>
+      </div>
+      <div class="row" style="margin-top:16px">
+        <div><label>Grant credits</label><input id="g_amt" type="number" min="1" placeholder="50"/></div>
+        <div><label>Reason</label><input id="g_note" placeholder="Promo / support credit"/></div>
+        <div class="tight"><label>&nbsp;</label><button onclick='grant(${JSON.stringify(id)})'>Grant credits</button></div>
+      </div><div class="err-text" id="g_err"></div></div>
+      <div class="section-title">Transactions</div>
+      <div class="table-wrap"><table><thead><tr><th>Amount</th><th>Type</th><th>Status</th><th>Note</th><th>When</th></tr></thead>
+        <tbody>${txns||'<tr><td colspan="5"><div class="state" style="padding:24px"><div class="t">No transactions</div></div></td></tr>'}</tbody></table></div>
+      <div class="section-title">Recent generations</div>
+      <div class="table-wrap"><table><thead><tr><th>Type</th><th>Status</th><th>Cost</th><th>When</th></tr></thead>
+        <tbody>${gens||'<tr><td colspan="4"><div class="state" style="padding:24px"><div class="t">No generations</div></div></td></tr>'}</tbody></table></div>`;
+  } catch(e){ el.innerHTML = errorHTML(e.message, 'searchUsers()'); }
 }
 async function grant(id){ const err=document.getElementById('g_err'); err.textContent='';
-  try{ const amount=parseInt(document.getElementById('g_amt').value,10); const note=document.getElementById('g_note').value;
+  try{ const amount=parseInt(document.getElementById('g_amt').value,10); if(!amount||amount<1) throw new Error('Enter a positive amount.');
+    const note=document.getElementById('g_note').value;
     const r=await api('/admin/users/'+id+'/credits',{method:'POST',body:JSON.stringify({amount,note})});
-    toast('Granted. New balance: '+r.balance); viewUser(id); }catch(e){ err.textContent=e.message; } }
+    toast('Granted · new balance '+r.balance); viewUser(id); }catch(e){ err.textContent=e.message; } }
 
+/* ---------- Generations ---------- */
+let genState = { status:'', type:'', offset:0, limit:25 };
+async function renderGenerations(v){
+  const p = new URLSearchParams(); if(genState.status)p.set('status',genState.status); if(genState.type)p.set('type',genState.type);
+  p.set('limit',genState.limit); p.set('offset',genState.offset);
+  const r = await api('/admin/generations?'+p.toString());
+  const rows = r.items.map(g=>`<tr>
+    <td>${esc(g.user_name||'—')}<div class="sub">${esc(g.user_email||'')}</div></td>
+    <td><span class="pill neutral">${esc(g.type)}</span></td>
+    <td class="muted">${esc(g.mode)}</td>
+    <td>${statusPill(g.status)}</td>
+    <td>${g.credit_cost}</td>
+    <td class="muted">${g.error_code?('<span class="pill err">'+esc(g.error_code)+'</span>'):'—'}</td>
+    <td class="muted">${fmtDateTime(g.created_at)}</td></tr>`).join('');
+  const statusOpts = ['<option value="">All statuses</option>'].concat(GEN_STATUSES.map(s=>`<option ${s===genState.status?'selected':''}>${s}</option>`)).join('');
+  const typeOpts = ['<option value="">All types</option>'].concat(GEN_TYPES.map(s=>`<option ${s===genState.type?'selected':''}>${s}</option>`)).join('');
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Activity</div><h1>Generations</h1><p>Global AI generation activity across all users (read-only).</p></div>
+    <div class="wrap" style="margin-bottom:14px">
+      <div style="max-width:200px"><label>Status</label><select onchange="genState.status=this.value;genState.offset=0;render()">${statusOpts}</select></div>
+      <div style="max-width:200px"><label>Type</label><select onchange="genState.type=this.value;genState.offset=0;render()">${typeOpts}</select></div>
+    </div>
+    ${r.items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>User</th><th>Type</th><th>Mode</th><th>Status</th><th>Cost</th><th>Error</th><th>Created</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>${pager(r,'genState')}` : emptyHTML('❖','No generations found','Nothing matches the current filters.')}`;
+}
+
+/* ---------- Transactions ---------- */
+let txnState = { type:'', offset:0, limit:25 };
+async function renderTransactions(v){
+  const p = new URLSearchParams(); if(txnState.type)p.set('type',txnState.type);
+  p.set('limit',txnState.limit); p.set('offset',txnState.offset);
+  const r = await api('/admin/transactions?'+p.toString());
+  const rows = r.items.map(t=>`<tr>
+    <td>${esc(t.user_name||'—')}<div class="sub">${esc(t.user_email||'')}</div></td>
+    <td style="font-weight:600;color:${t.amount>=0?'var(--ok)':'var(--err)'}">${t.amount>0?'+':''}${t.amount}</td>
+    <td>${t.balance_after}</td>
+    <td><span class="pill neutral">${esc(t.type)}</span></td>
+    <td>${statusPill(t.status)}</td>
+    <td class="muted">${esc(t.note||'—')}</td>
+    <td class="muted">${fmtDateTime(t.created_at)}</td></tr>`).join('');
+  const typeOpts = ['<option value="">All types</option>'].concat(TXN_TYPES.map(s=>`<option ${s===txnState.type?'selected':''}>${s}</option>`)).join('');
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Activity</div><h1>Credits & Transactions</h1><p>The append-only credit ledger across all users (read-only).</p></div>
+    <div class="wrap" style="margin-bottom:14px"><div style="max-width:220px"><label>Transaction type</label>
+      <select onchange="txnState.type=this.value;txnState.offset=0;render()">${typeOpts}</select></div></div>
+    ${r.items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th>User</th><th>Amount</th><th>Balance</th><th>Type</th><th>Status</th><th>Note</th><th>When</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>${pager(r,'txnState')}` : emptyHTML('◈','No transactions found','Nothing matches the current filters.')}`;
+}
+
+function pager(r, stateName){
+  const from = r.total===0?0:r.offset+1, to = Math.min(r.offset+r.limit, r.total);
+  const prevD = r.offset<=0, nextD = r.offset+r.limit>=r.total;
+  return `<div class="pagination">
+    <span>${from}–${to} of ${r.total}</span>
+    <button class="secondary icon" ${prevD?'disabled':''} onclick="${stateName}.offset=Math.max(0,${stateName}.offset-${stateName}.limit);render()">← Prev</button>
+    <button class="secondary icon" ${nextD?'disabled':''} onclick="${stateName}.offset=${stateName}.offset+${stateName}.limit;render()">Next →</button>
+  </div>`;
+}
+
+/* ---------- Settings ---------- */
 async function renderSettings(v){
   const rows = await api('/admin/settings');
-  v.innerHTML = `<h2>System settings</h2>
-    <div class="banner">Credit costs and feature flags are read by the app from <code>/config</code>. Edits apply immediately.</div>
-    ${rows.map(s=>`<div class="card" style="margin-bottom:14px">
-      <div class="flex"><strong>${esc(s.key)}</strong><div class="spacer"></div><button class="secondary" onclick="saveSetting('${s.key}')">Save</button></div>
-      <p class="muted" style="margin:6px 0">${esc(s.description||'')}</p>
-      <textarea id="set_${s.key}" rows="5" style="font-family:ui-monospace,monospace;font-size:13px">${esc(JSON.stringify(s.value,null,2))}</textarea>
-      <div class="err" id="err_${s.key}"></div></div>`).join('')}`;
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">System</div><h1>Settings</h1><p>Credit costs and feature flags. The app reads these from <code>/config</code> — edits apply immediately.</p></div>
+    ${rows.length ? rows.map(s=>`<div class="card" style="margin-bottom:14px">
+      <div class="flex"><strong>${esc(s.key)}</strong><div class="spacer"></div><button class="secondary" onclick='saveSetting(${JSON.stringify(s.key)})'>Save</button></div>
+      ${s.description?`<p class="muted" style="margin:6px 0">${esc(s.description)}</p>`:''}
+      <textarea id="set_${cssId(s.key)}" rows="6" style="font-family:ui-monospace,SFMono-Regular,monospace;font-size:13px;margin-top:8px">${esc(JSON.stringify(s.value,null,2))}</textarea>
+      <div class="err-text" id="err_${cssId(s.key)}"></div></div>`).join('')
+    : emptyHTML('⚙','No settings defined','System settings will appear here when configured.')}`;
 }
-async function saveSetting(key){ const err=document.getElementById('err_'+key); err.textContent='';
-  try{ const value=JSON.parse(document.getElementById('set_'+key).value);
+function cssId(k){ return k.replace(/[^a-zA-Z0-9_-]/g,'_'); }
+async function saveSetting(key){ const id=cssId(key); const err=document.getElementById('err_'+id); err.textContent='';
+  try{ const value=JSON.parse(document.getElementById('set_'+id).value);
     await api('/admin/settings/'+encodeURIComponent(key),{method:'PUT',body:JSON.stringify({value})}); toast('Saved '+key);
-  }catch(e){ err.textContent = e.message.includes('JSON')?'Invalid JSON':e.message; } }
+  }catch(e){ err.textContent = e.message.includes('JSON')?'Invalid JSON — check the syntax.':e.message; } }
 
-// Auto-login if a token is present.
+/* ---------- System Health ---------- */
+async function renderHealth(v){
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">System</div><h1>System Health</h1><p>Live status of the production API, database, and authentication. No secrets are shown.</p></div>
+    <div id="health_body">${loadingHTML('Checking services…')}</div>`;
+  const body = document.getElementById('health_body');
+  const row = (label, ok, detail)=>`<div class="card" style="margin-bottom:12px"><div class="flex">
+    <span class="pill ${ok?'ok':'err'}">${ok?'●  Healthy':'●  Down'}</span>
+    <div><strong style="margin-left:6px">${esc(label)}</strong><div class="muted" style="font-size:12.5px">${esc(detail)}</div></div></div></div>`;
+  try {
+    // These endpoints are intentionally public and expose no secrets.
+    const [health, fb] = await Promise.all([
+      fetch(API+'/health').then(r=>r.json()).catch(()=>null),
+      fetch(API+'/auth/firebase-status').then(r=>r.json()).catch(()=>null),
+    ]);
+    let html = '';
+    html += row('API', !!health, health ? ('HTTPS · '+location.host) : 'Unreachable');
+    html += row('Database', health && health.db==='ok', health ? ('PostgreSQL · '+(health.db||'unknown')) : 'Unknown');
+    html += row('Firebase Admin', !!(fb && fb.configured), fb && fb.configured ? ('Configured · project '+esc(fb.project_id||'—')) : 'Not configured');
+    html += `<div class="card"><div class="muted" style="font-size:12.5px">Last checked ${new Date().toLocaleTimeString()} · <a href="#" onclick="event.preventDefault();renderHealth(view())">Refresh</a></div></div>`;
+    body.innerHTML = html;
+  } catch(e){ body.innerHTML = errorHTML(e.message, 'renderHealth(view())'); }
+}
+
+/* ---------- Modal ---------- */
+function openModal(html){ let m=document.getElementById('modal'); if(!m){ m=document.createElement('div'); m.id='modal'; document.body.appendChild(m); }
+  m.className='modal-back'; m.innerHTML=`<div class="modal" onclick="event.stopPropagation()">${html}</div>`; m.onclick=closeModal; }
+function closeModal(){ const m=document.getElementById('modal'); if(m){ m.className='hidden'; m.innerHTML=''; } }
+
+/* ---------- boot ---------- */
 if (TOKEN) { api('/admin/stats').then(boot).catch(()=>logout()); }
-document.getElementById('password').addEventListener('keydown', e=>{ if(e.key==='Enter') login(); });
 </script>
 </body>
 </html>

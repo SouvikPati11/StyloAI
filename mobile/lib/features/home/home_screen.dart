@@ -86,6 +86,7 @@ class _ImproveCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final onPrimary = scheme.onPrimary;
     return InkWell(
       borderRadius: BorderRadius.circular(AppRadii.lg),
       onTap: onTap,
@@ -101,23 +102,30 @@ class _ImproveCta extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text('PREMIUM STYLING',
+                      style: TextStyle(
+                          color: onPrimary.withValues(alpha: 0.65),
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.4)),
+                  const SizedBox(height: 8),
                   Text('Improve my look',
                       style: Theme.of(context)
                           .textTheme
                           .titleLarge
-                          ?.copyWith(color: Colors.white)),
+                          ?.copyWith(color: onPrimary)),
                   const SizedBox(height: 4),
                   Text('Upload your photo and try a new style in seconds.',
                       style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
+                          color: onPrimary.withValues(alpha: 0.82),
                           fontSize: 13.5)),
                 ],
               ),
             ),
             const SizedBox(width: AppSpace.md),
-            const CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Icon(Icons.arrow_forward, color: AppColors.accent),
+            CircleAvatar(
+              backgroundColor: onPrimary,
+              child: Icon(Icons.arrow_forward, color: scheme.primary),
             ),
           ],
         ),

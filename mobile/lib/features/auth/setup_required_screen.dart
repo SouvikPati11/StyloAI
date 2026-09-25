@@ -40,8 +40,8 @@ class SetupRequiredScreen extends StatelessWidget {
                       radius: 14,
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       child: Text('${e.key + 1}',
-                          style: const TextStyle(
-                              color: Colors.white,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.onPrimary,
                               fontWeight: FontWeight.w700,
                               fontSize: 13)),
                     ),

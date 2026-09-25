@@ -27,8 +27,12 @@ import { HealthController } from './health/health.controller';
       validate: validateEnv,
     }),
     // Serves the admin panel SPA at /admin (static; talks to the /v1/admin API).
+    // The compiled module lives at dist/src/, and `nest build` does not copy the
+    // `public/` tree into dist, so the static root must point at the source
+    // public/admin folder: dist/src -> ../.. -> <backend>/public/admin. This maps
+    // /admin/ -> public/admin/index.html and /admin/logo.png -> the brand asset.
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'public'),
+      rootPath: join(__dirname, '..', '..', 'public', 'admin'),
       serveRoot: '/admin',
       serveStaticOptions: { index: 'index.html' },
     }),

@@ -18,8 +18,13 @@ class _StyloAppState extends ConsumerState<StyloApp> {
     return MaterialApp.router(
       title: 'StyloAI',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
+      // StyloAI's identity is the deep-navy / champagne-gold canvas (it matches
+      // the launcher icon, native splash, and the admin Studio). Lock to dark so
+      // the premium look is consistent on every device, regardless of the OS
+      // light/dark setting. Both themes are retained for future use.
+      theme: AppTheme.dark(),
       darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.dark,
       routerConfig: _router,
     );
   }

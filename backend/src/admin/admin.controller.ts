@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 import { AdminRole, CreditTxnType } from '@prisma/client';
 import { AdminService } from './admin.service';
@@ -42,6 +42,29 @@ export class AdminController {
   @UseGuards(AdminAuthGuard)
   stats() {
     return this.admin.stats();
+  }
+
+  /** Read-only global generation activity (filter by status/type). */
+  @Get('generations')
+  @UseGuards(AdminAuthGuard)
+  listGenerations(
+    @Query('status') status?: string,
+    @Query('type') type?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.admin.listGenerations({ status, type, limit, offset });
+  }
+
+  /** Read-only global credit-ledger feed (filter by type). */
+  @Get('transactions')
+  @UseGuards(AdminAuthGuard)
+  listTransactions(
+    @Query('type') type?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.admin.listTransactions({ type, limit, offset });
   }
 
   @Get('settings')

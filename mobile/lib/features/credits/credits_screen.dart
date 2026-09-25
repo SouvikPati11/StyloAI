@@ -118,11 +118,15 @@ class _CreditsScreenState extends ConsumerState<CreditsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Your balance',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: 0.85))),
+                    style: TextStyle(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onPrimary
+                            .withValues(alpha: 0.82))),
                 const SizedBox(height: 4),
                 Text('${me?.balance ?? 0} credits',
-                    style: t.displayMedium?.copyWith(color: Colors.white)),
+                    style: t.displayMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onPrimary)),
               ],
             ),
           ),
@@ -226,11 +230,12 @@ class _ProductTile extends StatelessWidget {
                 style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(44)),
                 child: busy
-                    ? const SizedBox(
+                    ? SizedBox(
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
+                            strokeWidth: 2,
+                            color: Theme.of(context).colorScheme.onPrimary))
                     : Text(product.priceHint ?? 'Buy'),
               ),
             ),

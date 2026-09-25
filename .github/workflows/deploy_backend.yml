@@ -220,6 +220,34 @@ jobs:
             journalctl -u styloai-backend -n 40 --no-pager || true
             exit 1
           fi
+          echo "styloai-backend is active and healthy on 127.0.0.1:3000."
+
+          # ================= READ-ONLY infra inspection ======================
+          # Reports the current production state so the Nginx/TLS reverse proxy
+          # for https://api.souvikpati.in can be provisioned WITHOUT overwriting
+          # other sites/services. Changes nothing. Non-secret output only.
+          echo "===== [inspect] production infra (read-only) ====="
+          (grep -E '^(NAME|VERSION)=' /etc/os-release 2>/dev/null | sed 's/^/[inspect] os /') || true
+          printf '[inspect] pkg-mgr:'; for p in dnf yum apt-get; do command -v "$p" >/dev/null 2>&1 && printf ' %s' "$p"; done; echo
+          IMDS_TOKEN=$(curl -s -X PUT "http://169.254.169.254/latest/api/token" \
+            -H "X-aws-ec2-metadata-token-ttl-seconds: 60" 2>/dev/null || true)
+          PUBIP=$(curl -s -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" \
+            http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || true)
+          echo "[inspect] instance public IPv4: ${PUBIP:-unknown}"
+          echo "[inspect] DNS api.souvikpati.in ->"; (getent hosts api.souvikpati.in | sed 's/^/[inspect]   /') || echo "[inspect]   (no resolution)"
+          if command -v nginx >/dev/null 2>&1; then nginx -v 2>&1 | sed 's/^/[inspect] nginx /'; else echo "[inspect] nginx: NOT installed"; fi
+          echo "[inspect] nginx active: $(systemctl is-active nginx 2>/dev/null || echo none)"
+          echo "[inspect] nginx server_name directives (existing sites to preserve):"
+          (grep -rhE '^[[:space:]]*server_name' /etc/nginx 2>/dev/null | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
+          echo "[inspect] /etc/nginx/conf.d:"; (ls -1 /etc/nginx/conf.d 2>/dev/null | sed 's/^/[inspect]   /') || true
+          echo "[inspect] /etc/nginx/sites-enabled:"; (ls -1 /etc/nginx/sites-enabled 2>/dev/null | sed 's/^/[inspect]   /') || true
+          echo "[inspect] certbot: $(command -v certbot >/dev/null 2>&1 && echo present || echo absent)"
+          echo "[inspect] letsencrypt live certs:"; (ls -1 /etc/letsencrypt/live 2>/dev/null | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
+          echo "[inspect] listening 80/443/3000:"; (ss -lntp 2>/dev/null | grep -E ':80 |:443 |:3000 ' | sed 's/^/[inspect]   /') || echo "[inspect]   (none)"
+          echo "[inspect] ufw: $(command -v ufw >/dev/null 2>&1 && (ufw status 2>/dev/null | head -1) || echo 'not installed')"
+          echo "[inspect] firewalld: $(systemctl is-active firewalld 2>/dev/null || echo none)"
+          echo "===== [inspect] end ====="
+
           echo "Deployment succeeded; styloai-backend is active and healthy."
           EOF
 

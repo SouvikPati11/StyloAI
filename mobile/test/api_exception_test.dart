@@ -32,5 +32,23 @@ void main() {
       expect(ApiException('TOKEN_EXPIRED', 'x').isAuth, isTrue);
       expect(ApiException('UNAUTHENTICATED', 'x').isAuth, isTrue);
     });
+
+    test('network carries a precise diag but stays user-clean', () {
+      final e = ApiException.network(diag: 'CONNECTION_TIMEOUT');
+      expect(e.isNetwork, isTrue);
+      expect(e.diag, 'CONNECTION_TIMEOUT');
+      expect(e.message.toLowerCase(), contains('connection'));
+    });
+
+    test('HTTP status errors are never network and keep their status', () {
+      for (final s in [401, 403, 404, 500, 502]) {
+        final e = ApiException('HTTP_$s', 'x', status: s, diag: 'HTTP_$s');
+        expect(e.isNetwork, isFalse, reason: 'HTTP $s must not be network');
+        expect(e.status, s);
+      }
+      // 401 specifically is the auth/refresh trigger, not a network error.
+      expect(ApiException('UNAUTHENTICATED', 'x', status: 401).isNetwork,
+          isFalse);
+    });
   });
 }

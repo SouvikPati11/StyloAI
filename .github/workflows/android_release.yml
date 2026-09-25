@@ -91,6 +91,28 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
+      # Prove the release build receives a usable backend URL. An empty or
+      # wrong-host PROD_API_BASE_URL produces exactly the on-device "No
+      # connection" symptom (empty base, or cleartext blocked because Android
+      # only permits cleartext HTTP to the host in network_security_config).
+      # Only the scheme/host are printed (the IP is already public in the repo);
+      # the full secret value is never echoed. Fails fast if empty.
+      - name: Validate release API base URL (no secret printed)
+        env:
+          PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          CLEARTEXT_HOST: "13.235.73.14"
+        run: |
+          if [ -z "$PROD_API_BASE_URL" ]; then
+            echo "::error::PROD_API_BASE_URL secret is EMPTY. The release app would have no backend URL and every request fails as 'No connection'. Set it to http://13.235.73.14:3000 in repo Settings → Secrets → Actions."
+            exit 1
+          fi
+          scheme="${PROD_API_BASE_URL%%://*}"
+          rest="${PROD_API_BASE_URL#*://}"; host="${rest%%/*}"; host="${host%%:*}"
+          echo "Release API base: scheme=$scheme host=$host"
+          if [ "$scheme" = "http" ] && [ "$host" != "$CLEARTEXT_HOST" ]; then
+            echo "::warning::scheme=http but host=$host is not the cleartext-allowed host ($CLEARTEXT_HOST). Android will block this request (CLEARTEXT_BLOCKED) unless you add the host to network_security_config or serve HTTPS."
+          fi
+
       - name: Build App Bundle (AAB)
         run: >
           flutter build appbundle --release

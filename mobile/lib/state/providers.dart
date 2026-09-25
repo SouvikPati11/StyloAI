@@ -121,8 +121,10 @@ class AuthController extends StateNotifier<AuthState> {
     try {
       res = await ref.read(authRepoProvider).loginWithGoogle(idToken);
     } on ApiException catch (e) {
-      throw AuthFailure(e.isNetwork ? AuthStage.network : AuthStage.backend,
-          e.code, 'Backend /auth/google failed: ${e.code} ${e.message}');
+      throw AuthFailure(
+          e.isNetwork ? AuthStage.network : AuthStage.backend,
+          e.code,
+          'POST /auth/google failed: code=${e.code} status=${e.status} diag=${e.diag} :: ${e.message}');
     }
     await ref.read(tokenStoreProvider).save(
           res['access_token'] as String,
@@ -134,8 +136,10 @@ class AuthController extends StateNotifier<AuthState> {
       final me = await ref.read(userRepoProvider).me();
       state = state.copyWith(phase: AuthPhase.signedIn, me: me);
     } on ApiException catch (e) {
-      throw AuthFailure(e.isNetwork ? AuthStage.network : AuthStage.backend,
-          e.code, 'Load profile after sign-in failed: ${e.code} ${e.message}');
+      throw AuthFailure(
+          e.isNetwork ? AuthStage.network : AuthStage.backend,
+          e.code,
+          'GET /me after sign-in failed: code=${e.code} status=${e.status} diag=${e.diag} :: ${e.message}');
     }
     _postSignIn();
   }

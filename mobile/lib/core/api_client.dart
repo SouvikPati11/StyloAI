@@ -34,6 +34,10 @@ class ApiClient {
         if (t != null && options.headers['Authorization'] == null) {
           options.headers['Authorization'] = 'Bearer $t';
         }
+        // Diagnostic (non-secret): method + host + path only. Never the query,
+        // body, or Authorization header (those can carry tokens).
+        debugPrint('[api] request=${options.method} '
+            '${options.uri.host}:${options.uri.port}${options.uri.path}');
         handler.next(options);
       },
     ));
@@ -104,32 +108,87 @@ class ApiClient {
   }
 
   ApiException _toApiException(DioException e) {
-    if (e.type == DioExceptionType.connectionError ||
-        e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.sendTimeout) {
-      // Diagnostic (non-secret): distinguish the real transport failure so
-      // "No connection" is never mistaken for "the phone has no internet".
-      // Logs only method + scheme/host/port/path (no query/body/headers, which
-      // may carry tokens), the Dio error type, and the underlying error class
-      // (SocketException ≈ refused/DNS, HandshakeException ≈ TLS).
-      final o = e.requestOptions;
-      final u = o.uri;
-      debugPrint('[api] transport-fail '
-          'stage=${o.method} target=${u.scheme}://${u.host}:${u.port}${u.path} '
-          'dioType=${e.type.name} cause=${e.error?.runtimeType ?? 'unknown'}');
-      return ApiException.network();
+    final u = e.requestOptions.uri;
+    final where = '${u.host}:${u.port}${u.path}';
+
+    // An HTTP response was received → this is NEVER "No connection". Classify by
+    // status (401/403/404/500…) and surface the backend's error envelope when
+    // present. This guarantees a 4xx/5xx is never mislabeled as a network error.
+    final resp = e.response;
+    if (resp != null) {
+      final status = resp.statusCode;
+      final data = resp.data;
+      if (data is Map && data['error'] is Map) {
+        final err = data['error'] as Map;
+        final code = (err['code'] ?? 'HTTP_$status').toString();
+        debugPrint('[api] http-error status=$status code=$code path=${u.path}');
+        return ApiException(
+          code,
+          (err['message'] ?? 'Something went wrong.').toString(),
+          details: (err['details'] as Map?)?.cast<String, dynamic>(),
+          status: status,
+          diag: 'HTTP_$status',
+        );
+      }
+      debugPrint('[api] http-error status=$status (no envelope) path=${u.path}');
+      return ApiException('HTTP_$status', _httpMessage(status),
+          status: status, diag: 'HTTP_$status');
     }
-    final data = e.response?.data;
-    if (data is Map && data['error'] is Map) {
-      final err = data['error'] as Map;
-      return ApiException(
-        (err['code'] ?? 'INTERNAL').toString(),
-        (err['message'] ?? 'Something went wrong.').toString(),
-        details: (err['details'] as Map?)?.cast<String, dynamic>(),
-        status: e.response?.statusCode,
-      );
+
+    // No response → a genuine transport failure. Classify the precise cause so
+    // the logcat pinpoints it (DNS / refused / timeout / cleartext / TLS).
+    final diag = _classifyTransport(e);
+    debugPrint('[api] transport-error=$diag target=$where '
+        'dioType=${e.type.name} cause=${e.error?.runtimeType ?? 'unknown'}');
+    return ApiException.network(diag: diag);
+  }
+
+  /// Maps a transport-level [DioException] to a precise, non-secret code.
+  String _classifyTransport(DioException e) {
+    if (e.type == DioExceptionType.connectionTimeout ||
+        e.type == DioExceptionType.sendTimeout ||
+        e.type == DioExceptionType.receiveTimeout) {
+      return 'CONNECTION_TIMEOUT';
     }
-    return ApiException.unknown();
+    final blob = '${e.error}'.toLowerCase();
+    if (blob.contains('failed host lookup') ||
+        blob.contains('nodename nor servname') ||
+        blob.contains('name or service not known')) {
+      return 'DNS_FAILURE';
+    }
+    if (blob.contains('cleartext')) return 'CLEARTEXT_BLOCKED';
+    if (blob.contains('handshake') ||
+        blob.contains('certificate') ||
+        blob.contains('tls') ||
+        blob.contains('ssl')) {
+      return 'TLS_ERROR';
+    }
+    if (blob.contains('connection refused')) return 'CONNECTION_REFUSED';
+    if (blob.contains('timed out') || blob.contains('timeout')) {
+      return 'CONNECTION_TIMEOUT';
+    }
+    if (blob.contains('network is unreachable') ||
+        blob.contains('no route to host')) {
+      return 'NETWORK_UNREACHABLE';
+    }
+    return 'SOCKET_ERROR';
+  }
+
+  String _httpMessage(int? status) {
+    switch (status) {
+      case 401:
+        return 'Your session has expired. Please sign in again.';
+      case 403:
+        return 'You don’t have access to this.';
+      case 404:
+        return 'Not found.';
+      case 429:
+        return 'Too many requests. Please try again shortly.';
+      default:
+        if (status != null && status >= 500) {
+          return 'The server had a problem. Please try again.';
+        }
+        return 'Something went wrong. Please try again.';
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'env.dart';
 import 'api_exception.dart';
 import 'token_store.dart';
@@ -20,6 +21,13 @@ class ApiClient {
           receiveTimeout: const Duration(seconds: 40),
           headers: {'Content-Type': 'application/json'},
         )) {
+    // Diagnostic (non-secret): record which host the build actually targets.
+    // This makes a misconfigured base URL (e.g. an emulator loopback left in a
+    // release build, or an empty --dart-define) obvious in logcat. Only the
+    // scheme/host/port are logged — never paths with data, tokens or secrets.
+    final b = Uri.tryParse(Env.apiBaseUrl);
+    debugPrint('[api] baseUrl target=${b == null ? '(unparseable)' : '${b.scheme}://${b.host}:${b.hasPort ? b.port : '(default)'}'} flavor=${Env.flavor}');
+
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) {
         final t = tokens.accessToken;
@@ -100,6 +108,16 @@ class ApiClient {
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout) {
+      // Diagnostic (non-secret): distinguish the real transport failure so
+      // "No connection" is never mistaken for "the phone has no internet".
+      // Logs only method + scheme/host/port/path (no query/body/headers, which
+      // may carry tokens), the Dio error type, and the underlying error class
+      // (SocketException ≈ refused/DNS, HandshakeException ≈ TLS).
+      final o = e.requestOptions;
+      final u = o.uri;
+      debugPrint('[api] transport-fail '
+          'stage=${o.method} target=${u.scheme}://${u.host}:${u.port}${u.path} '
+          'dioType=${e.type.name} cause=${e.error?.runtimeType ?? 'unknown'}');
       return ApiException.network();
     }
     final data = e.response?.data;

@@ -93,6 +93,13 @@ jobs:
           # git must never prompt for credentials — fail fast instead of hanging.
           export GIT_TERMINAL_PROMPT=0
           export GIT_ASKPASS=/usr/bin/true
+          # Prisma network hygiene. `prisma generate` makes a best-effort call
+          # to checkpoint.prisma.io (version check / telemetry); on a host with
+          # slow or restricted outbound egress that call has no short timeout and
+          # can stall generate for minutes. Disabling it removes the observed
+          # hang. (This does NOT disable engine downloads or code generation.)
+          export CHECKPOINT_DISABLE=1
+          export PRISMA_HIDE_UPDATE_MESSAGE=1
           REGION=ap-south-1
           PARAM_PATH=/styloai/prod
           APP_DIR=/home/ec2-user/StyloAI/backend
@@ -150,9 +157,24 @@ jobs:
           # Each step is time-bounded so no build/install/DB step can hang the
           # deployment. devDeps are required (prisma + nest CLI); local binaries
           # are called directly so `npx` can never prompt to install.
-          timeout 600 npm ci --include=dev --no-audit --no-fund
+          echo "[deploy] node=$(node -v) npm=$(npm -v)"
+
+          # Install deps WITHOUT the implicit @prisma/client postinstall
+          # (`prisma generate`). That implicit generate is what hung inside
+          # `npm ci`: every package finished downloading, then generate stalled
+          # until the 600s timeout killed the whole install (exit 124). We run
+          # generate on its own, separately-bounded line below, so an install
+          # can never again be taken down by generate — and a generate stall is
+          # isolated and clearly attributable.
+          echo "[deploy] npm ci (skip prisma postinstall generate)…"
+          PRISMA_SKIP_POSTINSTALL_GENERATE=true \
+            timeout 600 npm ci --include=dev --no-audit --no-fund
+
+          echo "[deploy] prisma generate…"
           timeout 300 ./node_modules/.bin/prisma generate
+          echo "[deploy] prisma migrate deploy…"
           timeout 180 ./node_modules/.bin/prisma migrate deploy
+          echo "[deploy] nest build…"
           timeout 420 npm run build
 
           # Ensure the runtime user owns what it needs; keep .env private.

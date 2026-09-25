@@ -46,6 +46,38 @@ jobs:
           fi
           echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
 
+      # ┌──────────────────────────────────────────────────────────────────┐
+      # │ TEMPORARY DIAGNOSTIC — REMOVE THIS STEP AFTER COPYING THE VALUES. │
+      # └──────────────────────────────────────────────────────────────────┘
+      # Prints ONLY the SHA-1 and SHA-256 fingerprints of the release signing
+      # certificate, read from the SAME keystore this workflow uses to sign the
+      # AAB/APK. It does NOT print the store password, the keystore contents, the
+      # private key, the alias, or any other credential, and it does NOT change
+      # how the release is signed. keytool reads the password from an env var
+      # (never echoed); every other line of its output is discarded. Delete this
+      # step once the two fingerprints have been copied from the Actions log.
+      - name: "TEMP: print release cert SHA-1/SHA-256 (remove after copying)"
+        env:
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set +x  # never trace the command line (would contain -storepass)
+          # -storepass is taken from $STORE_PASSWORD (masked by Actions, not
+          # echoed). Keep only the two fingerprint lines; discard everything
+          # else so no other certificate detail is emitted.
+          fingerprints="$(keytool -list -v \
+            -keystore android/app/upload-keystore.jks \
+            -alias "$KEY_ALIAS" \
+            -storepass "$STORE_PASSWORD" 2>/dev/null \
+            | grep -E 'SHA(1|256):' | sed -E 's/^[[:space:]]*//')"
+          if [ -z "$fingerprints" ]; then
+            echo "::error::Could not read fingerprints from the release keystore."
+            exit 1
+          fi
+          echo "----- Release signing certificate fingerprints -----"
+          echo "$fingerprints"
+          echo "----------------------------------------------------"
+
       - name: Write key.properties
         env:
           STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}

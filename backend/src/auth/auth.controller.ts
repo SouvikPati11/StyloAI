@@ -1,5 +1,14 @@
-import { Body, Controller, Delete, HttpCode, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { FirebaseService } from './firebase.service';
 import { GoogleAuthDto, RefreshDto } from './dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser, AuthUser } from './current-user.decorator';
@@ -11,7 +20,22 @@ export class AuthController {
   constructor(
     private readonly auth: AuthService,
     private readonly prisma: PrismaService,
+    private readonly firebase: FirebaseService,
   ) {}
+
+  /**
+   * Non-secret readiness probe for Firebase Admin (token-verification capability).
+   * Exposes only whether the Admin SDK initialized and which public project id it
+   * is bound to — never any credential. Used by CI to fail the deploy if the
+   * backend cannot verify Google/Firebase ID tokens.
+   */
+  @Get('firebase-status')
+  firebaseStatus() {
+    return {
+      configured: this.firebase.isConfigured,
+      project_id: this.firebase.projectId,
+    };
+  }
 
   /** Exchange a verified Firebase ID token for backend tokens; upserts the user. */
   @Post('google')

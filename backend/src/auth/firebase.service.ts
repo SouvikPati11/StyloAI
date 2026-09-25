@@ -19,31 +19,64 @@ export interface FirebaseIdentity {
 export class FirebaseService implements OnModuleInit {
   private readonly logger = new Logger(FirebaseService.name);
   private app?: admin.app.App;
+  private _projectId: string | null = null;
 
   constructor(private readonly config: ConfigService) {}
 
   onModuleInit() {
+    // In production the Admin SDK MUST initialize — Google Sign-In cannot work
+    // without it. A missing/invalid service account is a hard boot failure so a
+    // misconfigured backend can never appear healthy (it crash-loops and the
+    // deployment fails). In non-production it degrades to a warning for local dev.
+    const isProd = this.config.get<string>('NODE_ENV') === 'production';
+    const fail = (msg: string, err?: unknown): never | void => {
+      if (isProd) throw new Error(msg);
+      this.logger.warn(err ? `${msg} :: ${String(err)}` : msg);
+    };
+
     const raw = this.config.get<string>('FIREBASE_SERVICE_ACCOUNT_JSON');
     if (!raw) {
-      this.logger.warn(
+      // Keep the historical phrase for log-based tooling, plus a hard failure.
+      return void fail(
         'FIREBASE_SERVICE_ACCOUNT_JSON not set — Firebase auth verification disabled.',
       );
-      return;
     }
+
+    let serviceAccount: Record<string, unknown>;
     try {
-      const serviceAccount = JSON.parse(raw) as admin.ServiceAccount;
+      serviceAccount = JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+      return void fail('FIREBASE_SERVICE_ACCOUNT_JSON is not valid JSON.', err);
+    }
+
+    try {
       this.app =
         admin.apps.length > 0
           ? admin.app()
-          : admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
-      this.logger.log('Firebase Admin initialized.');
+          : admin.initializeApp({
+              credential: admin.credential.cert(
+                serviceAccount as admin.ServiceAccount,
+              ),
+            });
+      this._projectId =
+        this.app.options.projectId ??
+        (serviceAccount['project_id'] as string | undefined) ??
+        null;
+      this.logger.log(
+        `Firebase Admin initialized (project ${this._projectId ?? 'unknown'}).`,
+      );
     } catch (err) {
-      this.logger.error('Failed to initialize Firebase Admin.', err as Error);
+      return void fail('Failed to initialize Firebase Admin.', err);
     }
   }
 
   get isConfigured(): boolean {
     return !!this.app;
+  }
+
+  /** Public (non-secret) Firebase project id the Admin SDK is bound to. */
+  get projectId(): string | null {
+    return this._projectId;
   }
 
   async verifyIdToken(idToken: string): Promise<FirebaseIdentity> {

@@ -175,7 +175,7 @@ jobs:
           # (escaped \n in the private key stays literal for JSON.parse). The
           # value is written straight to .env — never echoed to stdout.
           printf "FIREBASE_SERVICE_ACCOUNT_JSON='%s'\n" \
-            "$FIREBASE_SERVICE_ACCOUNT_JSON_VAL" >> .env
+            "$(printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON_VAL" | tr -d '\n\r')" >> .env
 
           # Each step is time-bounded so no build/install/DB step can hang the
           # deployment. devDeps are required (prisma + nest CLI); local binaries
@@ -244,21 +244,11 @@ jobs:
             exit 1
           fi
           echo "styloai-backend is active and healthy on 127.0.0.1:3000."
-
-          # Prove the backend can actually VERIFY Google/Firebase tokens. Without
-          # the service account, verifyIdToken throws and every real
-          # /v1/auth/google returns 401 — invisible to /health and the 400 probe.
-          # The FirebaseService logs one of these lines on startup (no secrets).
-          if journalctl -u styloai-backend -n 120 --no-pager 2>/dev/null \
-               | grep -q "Firebase Admin initialized."; then
-            echo "[verify] Firebase Admin initialized — token verification ENABLED."
-          elif journalctl -u styloai-backend -n 120 --no-pager 2>/dev/null \
-               | grep -q "FIREBASE_SERVICE_ACCOUNT_JSON not set"; then
-            echo "::error::Firebase Admin NOT configured on the server — /v1/auth/google will reject every real token with 401. Ensure the FIREBASE_SERVICE_ACCOUNT_JSON secret holds the service account for project lifereset-556c7."
-            exit 1
-          else
-            echo "::warning::Could not confirm Firebase Admin init from logs (continuing)."
-          fi
+          # Note: FirebaseService now HARD-FAILS boot in production if the service
+          # account is missing/invalid, so an unconfigured backend can never reach
+          # this point (it crash-loops and the is-active check above fails). The
+          # definitive, runtime token-verification proof runs from the CI runner
+          # after Nginx is up (see the "Verify Firebase Admin" step in the job).
 
           # ============ Nginx TLS reverse proxy for api.souvikpati.in ========
           # Permanent edge: https://api.souvikpati.in -> 127.0.0.1:3000 (NestJS).
@@ -502,3 +492,48 @@ jobs:
             *)
               echo "::warning::/v1/auth/google returned unexpected $code (route is reachable, but check the backend handler)." ;;
           esac
+
+      # DEFINITIVE runtime proof that the backend can verify Firebase tokens.
+      # (1) Non-secret readiness probe: Firebase Admin must be initialized and
+      #     bound to project lifereset-556c7.
+      - name: Verify Firebase Admin initialized (status + project)
+        run: |
+          set -e
+          url="https://api.souvikpati.in/v1/auth/firebase-status"
+          code=$(curl -s -o /tmp/fs.out -w '%{http_code}' --max-time 25 "$url" || echo 000)
+          echo "firebase-status http=$code body=$(cat /tmp/fs.out 2>/dev/null || true)"
+          if [ "$code" != "200" ]; then
+            echo "::error::/v1/auth/firebase-status did not return 200 (got $code)."; exit 1
+          fi
+          if ! grep -q '"configured":true' /tmp/fs.out; then
+            echo "::error::Firebase Admin is NOT initialized on the backend (configured=false). Google Sign-In will 401. Check FIREBASE_SERVICE_ACCOUNT_JSON."; exit 1
+          fi
+          if ! grep -q '"project_id":"lifereset-556c7"' /tmp/fs.out; then
+            echo "::error::Firebase Admin is bound to the WRONG project (expected lifereset-556c7). The service account is for a different Firebase project."; exit 1
+          fi
+          echo "OK: Firebase Admin initialized for project lifereset-556c7."
+
+      # (2) Real token-verification proof WITHOUT a valid Google token: an
+      #     invalid but non-empty token must reach verifyIdToken and be rejected
+      #     with 401 'Invalid Firebase ID token' (not the 'not configured' path,
+      #     and not the empty-body 400). This proves the request actually reaches
+      #     the Firebase Admin verification code. No real token is used.
+      - name: Verify invalid Firebase token reaches verification (401)
+        run: |
+          set -e
+          url="https://api.souvikpati.in/v1/auth/google"
+          code=$(curl -s -o /tmp/it.out -w '%{http_code}' --max-time 25 \
+            -H 'Content-Type: application/json' \
+            -d '{"firebase_id_token":"invalid.notarealtoken.forverificationprobe"}' \
+            "$url" || echo 000)
+          echo "invalid-token http=$code body=$(head -c 200 /tmp/it.out 2>/dev/null || true)"
+          if grep -qi 'not configured' /tmp/it.out; then
+            echo "::error::Backend reports Firebase Admin not configured — verification code path is disabled."; exit 1
+          fi
+          if [ "$code" != "401" ]; then
+            echo "::error::Expected HTTP 401 for an invalid Firebase token (got $code). If 400, the token never reached verifyIdToken; if 5xx, the handler errored."; exit 1
+          fi
+          if ! grep -qi 'Invalid Firebase ID token' /tmp/it.out; then
+            echo "::error::401 returned but not from Firebase token verification (unexpected message). Check the auth handler."; exit 1
+          fi
+          echo "OK: invalid token reached Firebase Admin verification and was rejected with 401."

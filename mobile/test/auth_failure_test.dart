@@ -52,6 +52,17 @@ void main() {
       expect(f.userMessage, isNotEmpty);
     });
 
+    test('stageLabel uses the standard diagnostics vocabulary', () {
+      String label(AuthStage s) => AuthFailure(s, 'X', 'y').stageLabel;
+      expect(label(AuthStage.googleSignIn), 'google_sign_in');
+      expect(label(AuthStage.cancelled), 'google_sign_in');
+      expect(label(AuthStage.firebase), 'firebase_auth');
+      expect(label(AuthStage.tokenExchange), 'id_token');
+      expect(label(AuthStage.backend), 'backend_auth');
+      expect(label(AuthStage.network), 'network');
+      expect(label(AuthStage.config), 'config');
+    });
+
     test('every stage produces a non-null message and never throws', () {
       for (final stage in AuthStage.values) {
         final f = AuthFailure(stage, 'CODE', 'dev detail');

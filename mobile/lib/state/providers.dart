@@ -118,7 +118,7 @@ class AuthController extends StateNotifier<AuthState> {
         await ref.read(authServiceProvider).signInWithGoogleGetIdToken();
 
     // Stage 5: exchange the Firebase token for a backend session.
-    debugPrint('[auth] stage=backend_auth POST /v1/auth/google');
+    debugPrint('[auth] stage=backend_auth_start POST /v1/auth/google');
     final Map<String, dynamic> res;
     try {
       res = await ref.read(authRepoProvider).loginWithGoogle(idToken);
@@ -132,12 +132,15 @@ class AuthController extends StateNotifier<AuthState> {
           res['access_token'] as String,
           res['refresh_token'] as String,
         );
+    // Backend session tokens are stored (never logged).
+    debugPrint('[auth] stage=backend_auth_success');
 
     // Stage 6: load the profile so the shell has data immediately.
-    debugPrint('[auth] stage=me GET /v1/me');
+    debugPrint('[auth] stage=me_start GET /v1/me');
     try {
       final me = await ref.read(userRepoProvider).me();
-      debugPrint('[auth] stage=done signed_in');
+      debugPrint('[auth] stage=me_success');
+      debugPrint('[auth] stage=done_signed_in');
       state = state.copyWith(phase: AuthPhase.signedIn, me: me);
     } on ApiException catch (e) {
       throw AuthFailure(

@@ -55,9 +55,31 @@ class AuthFailure implements Exception {
     }
   }
 
-  /// Logs the real reason to the developer console (logcat) without secrets.
+  /// Stage name in the standard diagnostics vocabulary used across the flow.
+  String get stageLabel {
+    switch (stage) {
+      case AuthStage.config:
+        return 'config';
+      case AuthStage.cancelled:
+        return 'google_sign_in';
+      case AuthStage.googleSignIn:
+        return 'google_sign_in';
+      case AuthStage.firebase:
+        return 'firebase_auth';
+      case AuthStage.tokenExchange:
+        return 'id_token';
+      case AuthStage.backend:
+        return 'backend_auth';
+      case AuthStage.network:
+        return 'network';
+      case AuthStage.unknown:
+        return 'unknown';
+    }
+  }
+
+  /// Logs the real reason to logcat without any secret (no tokens/JWT/headers).
   void log() {
-    debugPrint('[auth] failed at stage=${stage.name} code=$code :: $devMessage');
+    debugPrint('[auth] stage=$stageLabel failed code=$code message=$devMessage');
   }
 
   @override
@@ -98,7 +120,7 @@ class AuthService {
     }
 
     // Stage 1: Google Sign-In (Google Play Services).
-    debugPrint('[auth] stage=google_sign_in');
+    debugPrint('[auth] stage=google_sign_in_start');
     GoogleSignInAccount? googleUser;
     try {
       googleUser = await _googleSignIn.signIn();
@@ -111,6 +133,7 @@ class AuthService {
     if (googleUser == null) {
       throw const AuthFailure(AuthStage.cancelled, 'CANCELLED', 'User cancelled Google sign-in');
     }
+    debugPrint('[auth] stage=google_sign_in_success');
 
     // Stage 2: obtain Google auth tokens.
     final GoogleSignInAuthentication googleAuth;
@@ -134,7 +157,7 @@ class AuthService {
     }
 
     // Stage 3: Firebase credential sign-in.
-    debugPrint('[auth] stage=firebase_auth');
+    debugPrint('[auth] stage=firebase_auth_start');
     final credential = GoogleAuthProvider.credential(
       accessToken: googleAuth.accessToken,
       idToken: googleIdToken,
@@ -148,15 +171,17 @@ class AuthService {
     } catch (e) {
       throw AuthFailure(AuthStage.firebase, 'FIREBASE_ERROR', 'Firebase sign-in error: $e');
     }
+    debugPrint('[auth] stage=firebase_auth_success');
 
     // Stage 4: obtain the Firebase ID token to hand to the backend.
+    debugPrint('[auth] stage=id_token_start');
     final idToken = await userCred.user?.getIdToken();
     if (idToken == null || idToken.isEmpty) {
       throw const AuthFailure(
           AuthStage.tokenExchange, 'NO_ID_TOKEN', 'Firebase returned an empty ID token');
     }
     // A non-null Firebase ID token exists. Never log the token itself.
-    debugPrint('[auth] stage=firebase_id_token ok (len ${idToken.length})');
+    debugPrint('[auth] stage=id_token_success (len ${idToken.length})');
     return idToken;
   }
 

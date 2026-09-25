@@ -469,6 +469,29 @@ jobs:
           fi
           echo "Public HTTPS API is live and healthy."
 
+      # Verify the admin panel (StyloAI Studio) is actually served. The static
+      # root is resolved from the compiled module dir, so a wrong path serves
+      # 404s silently — this fails the deploy if the SPA or its brand asset is
+      # not reachable at /admin. No secrets involved (static files only).
+      - name: Verify admin panel is served at /admin
+        run: |
+          set -e
+          base="https://api.souvikpati.in/admin"
+          idx=$(curl -s -o /tmp/admin.out -w '%{http_code}' --max-time 25 "$base/" || echo 000)
+          echo "admin index status=$idx"
+          if [ "$idx" != "200" ]; then
+            echo "::error::Admin panel not served at $base/ (got $idx). Check ServeStaticModule rootPath."; exit 1
+          fi
+          if ! grep -qi 'StyloAI Studio' /tmp/admin.out; then
+            echo "::error::/admin served but did not contain the StyloAI Studio shell."; exit 1
+          fi
+          logo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 "$base/logo.png" || echo 000)
+          echo "admin logo status=$logo"
+          if [ "$logo" != "200" ]; then
+            echo "::error::Admin brand asset not served at $base/logo.png (got $logo)."; exit 1
+          fi
+          echo "OK: admin panel and brand asset are served at /admin."
+
       # Prove the /v1/auth/google ROUTE reaches NestJS through Nginx — not just
       # /health. A malformed (no Firebase token) request must get an APPLICATION
       # HTTP status (400/401/422), which proves the proxy + routing + validation

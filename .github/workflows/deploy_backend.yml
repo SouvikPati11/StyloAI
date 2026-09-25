@@ -194,7 +194,33 @@ jobs:
             journalctl -u styloai-backend -n 30 --no-pager || true
             exit 1
           fi
-          echo "Deployment succeeded; styloai-backend is active."
+          echo "styloai-backend is active."
+
+          # Prove the app actually serves traffic — not merely that the process
+          # started. Probe the health endpoint on loopback (bounded retries for
+          # a brief startup race) and confirm the port is listening. Non-secret.
+          echo "[deploy] health check http://127.0.0.1:3000/v1/health …"
+          HEALTH_OK=0
+          for _ in $(seq 1 15); do
+            CODE=$(curl -s -o /tmp/styloai_health.out -w '%{http_code}' \
+              --max-time 5 http://127.0.0.1:3000/v1/health || echo 000)
+            if [ "$CODE" = "200" ]; then
+              HEALTH_OK=1
+              echo "health HTTP 200: $(cat /tmp/styloai_health.out)"
+              break
+            fi
+            sleep 2
+          done
+          echo "[deploy] listening sockets on :3000:"
+          (ss -ltnp 2>/dev/null | grep ':3000 ' \
+            || ss -ltn 2>/dev/null | grep ':3000 ' \
+            || echo "(:3000 not shown by ss)")
+          if [ "$HEALTH_OK" != "1" ]; then
+            echo "health check failed after retries; recent logs:"
+            journalctl -u styloai-backend -n 40 --no-pager || true
+            exit 1
+          fi
+          echo "Deployment succeeded; styloai-backend is active and healthy."
           EOF
 
           # Do not stack deployments: cancel any StyloAI deployment command still

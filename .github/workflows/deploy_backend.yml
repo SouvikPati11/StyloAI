@@ -444,3 +444,27 @@ jobs:
             exit 1
           fi
           echo "Public HTTPS API is live and healthy."
+
+      # Prove the /v1/auth/google ROUTE reaches NestJS through Nginx — not just
+      # /health. A malformed (no Firebase token) request must get an APPLICATION
+      # HTTP status (400/401/422), which proves the proxy + routing + validation
+      # pipeline is live. A 000/timeout or 502/504 would mean the route is not
+      # reachable. No real token is ever sent; nothing sensitive is printed.
+      - name: Verify /v1/auth/google route reachability (no token)
+        run: |
+          set -e
+          url="https://api.souvikpati.in/v1/auth/google"
+          echo "External POST $url with an empty body (expect an app 4xx)"
+          code=$(curl -s -o /tmp/ag.out -w '%{http_code}' --max-time 25 \
+            -H 'Content-Type: application/json' -d '{}' "$url" || echo 000)
+          echo "auth route status=$code body=$(head -c 200 /tmp/ag.out 2>/dev/null || true)"
+          case "$code" in
+            400|401|403|422)
+              echo "OK: /v1/auth/google reaches NestJS (validation rejected the empty body with $code)." ;;
+            000)
+              echo "::error::/v1/auth/google unreachable (transport failure/timeout). Nginx or Security Group problem."; exit 1 ;;
+            502|503|504)
+              echo "::error::/v1/auth/google returned $code — Nginx cannot reach NestJS (127.0.0.1:3000)."; exit 1 ;;
+            *)
+              echo "::warning::/v1/auth/google returned unexpected $code (route is reachable, but check the backend handler)." ;;
+          esac

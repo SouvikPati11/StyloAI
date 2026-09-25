@@ -74,7 +74,7 @@ class ApiClient {
       if (data == null || data == '') return <String, dynamic>{};
       return {'data': data};
     } on DioException catch (e) {
-      final apiErr = _toApiException(e);
+      final apiErr = ApiClient.mapDioException(e);
       // Attempt a single refresh on an expired/unauth response.
       if (!retried &&
           (apiErr.code == 'TOKEN_EXPIRED' ||
@@ -107,13 +107,16 @@ class ApiClient {
     }
   }
 
-  ApiException _toApiException(DioException e) {
+  /// Maps a [DioException] to a typed [ApiException]. Static + pure so the exact
+  /// classification logic the app uses can be unit-tested directly.
+  ///
+  /// Rule: if an HTTP response was received it is classified by status
+  /// (HTTP_400/401/…/500) and is NEVER "No connection"; only a genuine transport
+  /// failure (no response) becomes [ApiException.network] with a precise diag.
+  static ApiException mapDioException(DioException e) {
     final u = e.requestOptions.uri;
     final where = '${u.host}:${u.port}${u.path}';
 
-    // An HTTP response was received → this is NEVER "No connection". Classify by
-    // status (401/403/404/500…) and surface the backend's error envelope when
-    // present. This guarantees a 4xx/5xx is never mislabeled as a network error.
     final resp = e.response;
     if (resp != null) {
       final status = resp.statusCode;
@@ -131,20 +134,20 @@ class ApiClient {
         );
       }
       debugPrint('[api] http-error status=$status (no envelope) path=${u.path}');
-      return ApiException('HTTP_$status', _httpMessage(status),
+      return ApiException('HTTP_$status', httpMessage(status),
           status: status, diag: 'HTTP_$status');
     }
 
     // No response → a genuine transport failure. Classify the precise cause so
     // the logcat pinpoints it (DNS / refused / timeout / cleartext / TLS).
-    final diag = _classifyTransport(e);
+    final diag = classifyTransport(e);
     debugPrint('[api] transport-error=$diag target=$where '
         'dioType=${e.type.name} cause=${e.error?.runtimeType ?? 'unknown'}');
     return ApiException.network(diag: diag);
   }
 
   /// Maps a transport-level [DioException] to a precise, non-secret code.
-  String _classifyTransport(DioException e) {
+  static String classifyTransport(DioException e) {
     if (e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
         e.type == DioExceptionType.receiveTimeout) {
@@ -174,7 +177,7 @@ class ApiClient {
     return 'SOCKET_ERROR';
   }
 
-  String _httpMessage(int? status) {
+  static String httpMessage(int? status) {
     switch (status) {
       case 401:
         return 'Your session has expired. Please sign in again.';

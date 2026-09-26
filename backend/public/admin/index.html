@@ -412,9 +412,23 @@ async function renderTrending(v){
 function parseTags(s){ return (s||'').split(',').map(x=>x.trim()).filter(Boolean); }
 function priceOrNull(s){ const t=(s||'').trim(); if(t==='') return null; const n=parseInt(t,10); return isNaN(n)?null:Math.max(0,n); }
 async function uploadImage(file){
+  // Basic client-side validation before requesting a presigned URL.
+  const ALLOWED = ['image/jpeg','image/png','image/webp'];
+  if(!ALLOWED.includes(file.type)) throw new Error('Unsupported image type ('+(file.type||'unknown')+'). Use JPG, PNG or WEBP.');
+  if(file.size > 12*1024*1024) throw new Error('Image is too large ('+(file.size/1048576).toFixed(1)+'MB). Max 12MB.');
   const p = await api('/admin/media/presign', { method:'POST', body: JSON.stringify({ content_type: file.type }) });
-  const put = await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
-  if(!put.ok) throw new Error('Image upload failed ('+put.status+')');
+  let put;
+  try {
+    put = await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
+  } catch (e) {
+    // A thrown fetch here is almost always a browser CORS rejection on the S3
+    // PUT — the bucket must allow PUT from this admin origin. Surface it clearly.
+    throw new Error('Upload to storage was blocked by the browser (likely S3 CORS). The S3 bucket must allow PUT from '+location.origin+'. Ask an admin to add a CORS rule.');
+  }
+  if(!put.ok){
+    const detail = await put.text().catch(()=> '');
+    throw new Error('Image upload failed ('+put.status+'). '+(detail? detail.slice(0,140):'Check S3 permissions/CORS.'));
+  }
   return p.s3_key;
 }
 async function createTrending(){

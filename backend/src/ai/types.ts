@@ -39,6 +39,7 @@ export class ProviderError extends Error {
     public readonly code:
       | 'provider_timeout'
       | 'provider_error'
+      | 'quota_exceeded'
       | 'safety_blocked'
       | 'no_image_returned'
       | 'not_configured',

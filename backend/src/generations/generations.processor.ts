@@ -191,8 +191,14 @@ export class GenerationsProcessor extends WorkerHost implements OnModuleInit {
         (attemptsLeft ? 'will_retry' : 'final'),
     );
 
-    if (attemptsLeft && code !== 'safety_blocked' && code !== 'not_configured') {
-      // Let BullMQ retry; keep the hold in place.
+    if (
+      attemptsLeft &&
+      code !== 'safety_blocked' &&
+      code !== 'not_configured' &&
+      code !== 'quota_exceeded'
+    ) {
+      // Let BullMQ retry; keep the hold in place. Quota/safety/config errors are
+      // not transient, so we don't retry them (avoids a second wasted call).
       throw err;
     }
 

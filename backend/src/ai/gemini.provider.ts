@@ -82,6 +82,15 @@ export class GeminiProvider implements ImageGenerationProvider {
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       this.logger.warn(`Gemini ${res.status}: ${text.slice(0, 300)}`);
+      // 429 = the API key's quota/billing is exhausted. Distinct code so the
+      // diagnostic is unambiguous and we don't waste a retry (retrying 429s).
+      if (res.status === 429) {
+        throw new ProviderError(
+          'Gemini quota exceeded — enable billing / raise quota on the GEMINI_API_KEY.',
+          'quota_exceeded',
+          true,
+        );
+      }
       throw new ProviderError(`Gemini returned ${res.status}.`, 'provider_error', true);
     }
 

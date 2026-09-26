@@ -20,19 +20,27 @@ export class GenerationHealthController {
 
   @Get()
   async status() {
+    // The Redis round-trip is bounded HARD: if the queue is unreachable the call
+    // must return fast and NEVER hang the request (a hang would time out the
+    // Nginx upstream and briefly 502 the whole backend). A hung probe here is
+    // itself the signal that Redis is down.
     let queueReachable = false;
     let counts: Record<string, number> | null = null;
-    try {
-      // getJobCounts round-trips to Redis; success means the queue is reachable.
-      counts = (await this.queue.getJobCounts(
-        'waiting',
-        'active',
-        'delayed',
-        'failed',
-      )) as unknown as Record<string, number>;
+    // Issue the Redis round-trip and IMMEDIATELY attach a catch so a later
+    // rejection (e.g. Redis unreachable → MaxRetriesPerRequestError) can never
+    // surface as an unhandled rejection and crash the process. Then race it
+    // against a short timeout so the HTTP response is always fast.
+    const countsPromise = this.queue
+      .getJobCounts('waiting', 'active', 'delayed', 'failed')
+      .then((c) => c as unknown as Record<string, number>)
+      .catch(() => null);
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 2500),
+    );
+    const result = await Promise.race([countsPromise, timeout]);
+    if (result) {
+      counts = result;
       queueReachable = true;
-    } catch {
-      queueReachable = false;
     }
 
     return {

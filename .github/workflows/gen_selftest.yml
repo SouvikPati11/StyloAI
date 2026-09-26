@@ -35,6 +35,8 @@ jobs:
           cd /home/ec2-user/StyloAI/backend
           echo "[selftest] node=$(node -v) model=$(grep -E '^GEMINI_MODEL=' .env | sed 's/^GEMINI_MODEL=//')"
           timeout 200 node scripts/gen-selftest.mjs 2>&1 | tail -60
+          echo "----- recent backend Gemini/generation logs (non-secret) -----"
+          journalctl -u styloai-backend -n 400 --no-pager 2>/dev/null | grep -iE 'gemini|\[generation\]' | tail -25 || true
           REMOTE_EOF
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \

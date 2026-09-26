@@ -163,37 +163,64 @@ jobs:
             echo "[deploy] REDIS_URL not set — defaulting to local loopback Redis."
           fi
           # Provision a local Redis ONLY when the target is loopback (an external
-          # Redis endpoint is left untouched).
+          # Redis endpoint is left untouched). Deterministic: install whatever
+          # redis-family binary the distro offers, then run it under OUR OWN
+          # systemd unit + config (mirroring how nginx/certbot are provisioned),
+          # so we never depend on the distro's packaged service name. BullMQ
+          # requires maxmemory-policy=noeviction, which the config sets.
           REDIS_HOST_CHECK=$(printf '%s' "$REDIS_URL_VAL" | sed -E 's#^[a-z]+://([^@]*@)?([^:/]+).*#\2#')
           if [ "$REDIS_HOST_CHECK" = "127.0.0.1" ] || [ "$REDIS_HOST_CHECK" = "localhost" ]; then
             echo "[deploy] ensuring local Redis (loopback) for the generation queue…"
-            if ! command -v redis6-server >/dev/null 2>&1 && ! command -v redis-server >/dev/null 2>&1 && ! command -v valkey-server >/dev/null 2>&1; then
-              timeout 180 dnf install -y redis6 >/dev/null 2>&1 \
-                || timeout 180 dnf install -y valkey valkey-compat >/dev/null 2>&1 \
-                || timeout 180 dnf install -y redis >/dev/null 2>&1 || true
-            fi
-            REDIS_SVC=""
-            for s in redis6 valkey redis; do
-              if systemctl list-unit-files 2>/dev/null | grep -q "^$s\.service"; then REDIS_SVC=$s; break; fi
+            # Always attempt install (idempotent). Try AL2023 names in order.
+            timeout 180 dnf install -y redis6 >/tmp/redis_install.log 2>&1 \
+              || timeout 180 dnf install -y valkey >/tmp/redis_install.log 2>&1 \
+              || timeout 180 dnf install -y redis >/tmp/redis_install.log 2>&1 || true
+            # Find whatever server + cli binaries exist.
+            REDIS_BIN=""; for b in redis6-server redis-server valkey-server; do
+              if command -v "$b" >/dev/null 2>&1; then REDIS_BIN=$(command -v "$b"); break; fi
             done
-            if [ -n "$REDIS_SVC" ]; then
-              systemctl enable "$REDIS_SVC" >/dev/null 2>&1 || true
-              systemctl restart "$REDIS_SVC" 2>/dev/null || systemctl start "$REDIS_SVC" 2>/dev/null || true
-              echo "[deploy] redis service: $REDIS_SVC"
+            REDIS_CLI=""; for c in redis6-cli redis-cli valkey-cli; do
+              if command -v "$c" >/dev/null 2>&1; then REDIS_CLI=$(command -v "$c"); break; fi
+            done
+            echo "[deploy] redis bin=${REDIS_BIN:-none} cli=${REDIS_CLI:-none}"
+            if [ -z "$REDIS_BIN" ]; then
+              echo "::warning::No redis server binary found after install. dnf tail:"; tail -n 8 /tmp/redis_install.log 2>/dev/null || true
             else
-              echo "::warning::Could not install a local Redis package (redis6/valkey/redis). The generation queue will be unreachable until Redis is provided."
-            fi
-            REDIS_CLI=""
-            for c in redis6-cli redis-cli valkey-cli; do
-              if command -v "$c" >/dev/null 2>&1; then REDIS_CLI=$c; break; fi
-            done
-            if [ -n "$REDIS_CLI" ]; then
-              for i in 1 2 3 4 5 6; do
-                if "$REDIS_CLI" -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
-                  echo "[deploy] local Redis responded PONG."; break
+              # Our own minimal, queue-appropriate config (loopback only, no
+              # persistence, noeviction as BullMQ requires).
+              cat > /etc/styloai-redis.conf <<'REDISCONF'
+          bind 127.0.0.1
+          port 6379
+          protected-mode yes
+          daemonize no
+          save ""
+          appendonly no
+          maxmemory-policy noeviction
+          REDISCONF
+              printf '%s\n' \
+                '[Unit]' 'Description=StyloAI Redis (generation queue)' 'After=network.target' \
+                '[Service]' "ExecStart=$REDIS_BIN /etc/styloai-redis.conf" 'Restart=always' 'User=redis' 'Group=redis' \
+                '[Install]' 'WantedBy=multi-user.target' > /etc/systemd/system/styloai-redis.service
+              # Fall back to root if the redis user does not exist.
+              id redis >/dev/null 2>&1 || sed -i '/^User=redis$/d;/^Group=redis$/d' /etc/systemd/system/styloai-redis.service
+              systemctl daemon-reload
+              systemctl enable styloai-redis >/dev/null 2>&1 || true
+              systemctl restart styloai-redis 2>/dev/null || systemctl start styloai-redis 2>/dev/null || true
+              # Verify PONG (cli if present, else raw TCP), retrying briefly.
+              REDIS_OK=""
+              for i in 1 2 3 4 5 6 7 8; do
+                if [ -n "$REDIS_CLI" ]; then
+                  "$REDIS_CLI" -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG && REDIS_OK=1 && break
+                else
+                  (exec 3<>/dev/tcp/127.0.0.1/6379 && printf 'PING\r\n' >&3 && head -c 7 <&3 | grep -q PONG) 2>/dev/null && REDIS_OK=1 && break
                 fi
                 sleep 1
               done
+              if [ -n "$REDIS_OK" ]; then
+                echo "[deploy] local Redis responded PONG (styloai-redis)."
+              else
+                echo "::warning::Redis started but did not answer PONG. status:"; systemctl status styloai-redis --no-pager -l 2>/dev/null | tail -n 12 || true
+              fi
             fi
           fi
           JWT_ACCESS_SECRET_VAL=$(getp JWT_ACCESS_SECRET)

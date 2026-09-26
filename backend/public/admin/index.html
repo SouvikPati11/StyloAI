@@ -371,11 +371,13 @@ async function renderTrending(v){
     <td><span class="pill neutral">${esc(SECTION_LABELS[i.section]||i.section)}</span></td>
     <td>${tagChips(i.tags)}</td>
     <td>${priceLabel(i.creditPrice)}</td>
+    <td>${i.isTrending?'<span class="pill ok">★ trending</span>':'<span class="muted">—</span>'}</td>
     <td>${i.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
     <td class="muted">${i.position??0}</td>
     <td><div class="btn-row">
       <button class="ghost icon" title="Move up" onclick='moveTrending(${JSON.stringify(i.id)},-1)'>↑</button>
       <button class="ghost icon" title="Move down" onclick='moveTrending(${JSON.stringify(i.id)},1)'>↓</button>
+      <button class="secondary icon" title="${i.isTrending?'Remove from Trending':'Feature in Trending'}" onclick='setTrendingFlag(${JSON.stringify(i.id)},${!i.isTrending})'>${i.isTrending?'★':'☆'}</button>
       <button class="secondary icon" title="${i.isActive?'Hide':'Publish'}" onclick='toggleTrending(${JSON.stringify(i.id)},${!i.isActive})'>${i.isActive?'Hide':'Publish'}</button>
       <button class="secondary icon" onclick='editTrending(${JSON.stringify(i)})'>Edit</button>
       <button class="danger icon" onclick='delTrending(${JSON.stringify(i.id)})'>Delete</button>
@@ -398,6 +400,7 @@ async function renderTrending(v){
         <div><label>Credit price</label><input id="c_price" type="number" min="0" placeholder="default"/></div>
         <div><label>Preset key (optional)</label><input id="c_preset" placeholder="streetwear"/></div>
         <div><label>Position</label><input id="c_position" type="number" value="0" min="0"/></div>
+        <div class="tight"><label>Trending</label><label style="display:flex;align-items:center;gap:6px;color:var(--ink)"><input id="c_trending" type="checkbox" style="width:auto"/> Feature</label></div>
         <div><label>Image</label><input id="c_file" type="file" accept="image/*"/></div>
         <div class="tight"><label>&nbsp;</label><button id="c_add" onclick="createTrending()">Publish style</button></div>
       </div>
@@ -406,9 +409,10 @@ async function renderTrending(v){
     <div class="wrap" style="margin-bottom:14px"><div style="max-width:240px"><label>Filter by category</label>
       <select onchange="trendFilter=this.value; render();">${secOpts}</select></div></div>
     ${items.length ? `<div class="table-wrap"><table>
-      <thead><tr><th></th><th>Title</th><th>Category</th><th>Tags</th><th>Price</th><th>Status</th><th>Pos</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Title</th><th>Category</th><th>Tags</th><th>Price</th><th>Trending</th><th>Status</th><th>Pos</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>` : emptyHTML('✦','No trending styles yet','Publish your first style above to feature it in the app.')}`;
 }
+async function setTrendingFlag(id, on){ try{ await api('/admin/trending/'+id,{method:'PUT',body:JSON.stringify({is_trending:on})}); toast(on?'Featured in Trending':'Removed from Trending'); render(); }catch(e){ toast(e.message,true); } }
 function parseTags(s){ return (s||'').split(',').map(x=>x.trim()).filter(Boolean); }
 function priceOrNull(s){ const t=(s||'').trim(); if(t==='') return null; const n=parseInt(t,10); return isNaN(n)?null:Math.max(0,n); }
 async function uploadImage(file){
@@ -449,6 +453,7 @@ async function createTrending(){
       tags: parseTags(document.getElementById('c_tags').value),
       preset_key: document.getElementById('c_preset').value || undefined,
       ...(price!=null ? { credit_price: price } : {}),
+      is_trending: document.getElementById('c_trending').checked,
       position: parseInt(document.getElementById('c_position').value,10) || 0,
       image_s3_key: key,
     })});
@@ -473,6 +478,7 @@ function editTrending(i){
     <label style="margin-top:12px">Credit price (blank = category default, 0 = free)</label><input id="e_price" type="number" min="0" value="${i.creditPrice==null?'':i.creditPrice}"/>
     <label style="margin-top:12px">Preset key</label><input id="e_preset" value="${esc(i.presetKey||i.preset_key||'')}"/>
     <label style="margin-top:12px">Position</label><input id="e_position" type="number" value="${i.position??0}" min="0"/>
+    <label style="margin-top:12px;display:flex;align-items:center;gap:8px"><input id="e_trending" type="checkbox" style="width:auto" ${i.isTrending?'checked':''}/> Feature in Home Trending slider</label>
     <label style="margin-top:12px">Replace image (optional)</label><input id="e_file" type="file" accept="image/*"/>
     <div class="err-text" id="e_err"></div>
     <div class="btn-row" style="margin-top:18px;justify-content:flex-end"><button class="ghost" onclick="closeModal()">Cancel</button>
@@ -489,6 +495,7 @@ async function saveTrending(id){
       description:document.getElementById('e_desc').value, tags:parseTags(document.getElementById('e_tags').value),
       section:document.getElementById('e_section').value, preset_key:document.getElementById('e_preset').value,
       credit_price,
+      is_trending: document.getElementById('e_trending').checked,
       position: parseInt(document.getElementById('e_position').value,10)||0 };
     const file=document.getElementById('e_file').files[0];
     if(file){ body.image_s3_key = await uploadImage(file); }
@@ -542,6 +549,7 @@ async function renderPoses(v){
     <td><strong>${esc(p.title)}</strong><div class="sub">${esc(p.description||'')}</div></td>
     <td class="muted">${esc(p.poseType||'—')}</td>
     <td>${tagChips(p.tags)}</td>
+    <td>${p.creditPrice==null?'<span class="muted">default</span>':(p.creditPrice===0?'<span class="pill ok">free</span>':'<span class="gold">'+p.creditPrice+'</span>')}</td>
     <td>${p.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
     <td class="muted">${p.position??0}</td>
     <td><div class="btn-row">
@@ -550,13 +558,14 @@ async function renderPoses(v){
       <button class="danger icon" onclick='delPose(${JSON.stringify(p.id)})'>Delete</button>
     </div></td></tr>`).join('');
   v.innerHTML = `
-    <div class="page-head"><div class="eyebrow">Content</div><h1>Poses</h1><p>Reference poses are a separate, <strong>free</strong> content type — never charged and excluded from the paid trending model. Give each a clear name and a short instruction so users understand the pose.</p></div>
+    <div class="page-head"><div class="eyebrow">Content</div><h1>Poses</h1><p>Reference poses are a separate content type. They are <strong>free by default</strong> (price blank/0), but you can set a credit price — the app charges it authoritatively. Give each a clear name and instruction so users understand the pose.</p></div>
     <div class="banner">Good poses read clearly, e.g. <em>“Confident Standing — stand upright, one shoulder slightly forward, look slightly away.”</em> Avoid vague names like “Pose 1”.</div>
     <div class="card" style="margin-bottom:18px">
       <div class="row">
         <div><label>Title / name</label><input id="p_title" placeholder="Confident Standing"/></div>
         <div><label>Type (optional)</label><input id="p_type" placeholder="Standing"/></div>
         <div><label>Tags (comma-separated)</label><input id="p_tags" placeholder="Standing, Editorial"/></div>
+        <div><label>Credit price</label><input id="p_price" type="number" min="0" placeholder="default (free)"/></div>
       </div>
       <div class="row" style="margin-top:12px">
         <div style="flex:2"><label>Description / instruction</label><input id="p_desc" placeholder="Stand upright with one shoulder slightly forward, keep one hand relaxed and look slightly away from the camera."/></div>
@@ -567,7 +576,7 @@ async function renderPoses(v){
       <div class="err-text" id="p_err"></div>
     </div>
     ${items.length ? `<div class="table-wrap"><table>
-      <thead><tr><th></th><th>Pose</th><th>Type</th><th>Tags</th><th>Status</th><th>Pos</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Pose</th><th>Type</th><th>Tags</th><th>Price</th><th>Status</th><th>Pos</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>` : emptyHTML('⛹','No poses yet','Add your first pose above — it will appear (free) in the app.')}`;
 }
 async function createPose(){
@@ -583,6 +592,7 @@ async function createPose(){
       title, description:document.getElementById('p_desc').value || undefined,
       pose_type:document.getElementById('p_type').value || undefined,
       tags:parseTags(document.getElementById('p_tags').value),
+      ...(priceOrNull(document.getElementById('p_price').value)!=null ? { credit_price: priceOrNull(document.getElementById('p_price').value) } : {}),
       position:parseInt(document.getElementById('p_position').value,10)||0,
       image_s3_key:key })});
     toast('Pose added'); render();
@@ -597,6 +607,7 @@ function editPose(p){
     <label style="margin-top:12px">Type</label><input id="ep_type" value="${esc(p.poseType||'')}"/>
     <label style="margin-top:12px">Description / instruction</label><input id="ep_desc" value="${esc(p.description||'')}"/>
     <label style="margin-top:12px">Tags (comma-separated)</label><input id="ep_tags" value="${esc((p.tags||[]).join(', '))}"/>
+    <label style="margin-top:12px">Credit price (blank = category default, 0 = free)</label><input id="ep_price" type="number" min="0" value="${p.creditPrice==null?'':p.creditPrice}"/>
     <label style="margin-top:12px">Position</label><input id="ep_position" type="number" value="${p.position??0}" min="0"/>
     <label style="margin-top:12px">Replace image (optional)</label><input id="ep_file" type="file" accept="image/*"/>
     <div class="err-text" id="ep_err"></div>
@@ -607,8 +618,10 @@ async function savePose(id){
   const err=document.getElementById('ep_err'); err.textContent='';
   const btn=document.getElementById('ep_save'); btn.disabled=true; btn.textContent='Saving…';
   try{
+    const rawp = document.getElementById('ep_price').value.trim();
     const body={ title:document.getElementById('ep_title').value.trim(), pose_type:document.getElementById('ep_type').value,
       description:document.getElementById('ep_desc').value, tags:parseTags(document.getElementById('ep_tags').value),
+      credit_price: rawp==='' ? null : Math.max(0, parseInt(rawp,10)||0),
       position:parseInt(document.getElementById('ep_position').value,10)||0 };
     const file=document.getElementById('ep_file').files[0];
     if(file){ body.image_s3_key = await uploadImage(file); }

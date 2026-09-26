@@ -57,6 +57,7 @@ export class ContentController {
         tags: r.tags,
         preset_key: r.presetKey,
         credit_price: r.creditPrice,
+        is_trending: r.isTrending,
         image_url: await this.storage.presignDownload(r.imageS3Key, 3600),
       })),
     );
@@ -82,6 +83,7 @@ export class ContentController {
         description: r.description,
         pose_type: r.poseType,
         tags: r.tags,
+        credit_price: r.creditPrice,
         image_url: await this.storage.presignDownload(r.imageS3Key, 3600),
       })),
     );

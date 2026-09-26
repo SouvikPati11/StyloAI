@@ -233,9 +233,18 @@ class _TrendingSections extends ConsumerWidget {
             ),
           );
         }
+        // Featured "Trending" slider: admin-flagged items across categories.
+        final featured = [
+          for (final c in _kCategories) ...(grouped[c.$1] ?? const <TrendingItem>[])
+        ].where((t) => t.isTrending).toList();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (featured.isNotEmpty) ...[
+              const SectionHeader(title: 'Trending'),
+              _CategoryStrip(items: featured),
+              const SizedBox(height: AppSpace.xl),
+            ],
             for (final c in nonEmpty) ...[
               SectionHeader(title: c.$2),
               _CategoryStrip(items: grouped[c.$1]!),

@@ -22,6 +22,15 @@ void main() {
       expect(t.tags, ['Fade', 'Modern']);
       expect(t.description, 'Modern low fade hairstyle');
       expect(t.creditPrice, 10);
+      expect(t.isTrending, isFalse);
+    });
+
+    test('is_trending flag parses for the Home Trending slider', () {
+      final t = TrendingItem.fromJson({
+        'id': 'x', 'section': 'outfit', 'title': 'Featured', 'image_url': 'u',
+        'is_trending': true,
+      });
+      expect(t.isTrending, isTrue);
     });
 
     test('free content (price 0) and default price (null) are distinct', () {
@@ -51,8 +60,16 @@ void main() {
       expect(p.description, contains('shoulder'));
       expect(p.poseType, 'Standing');
       expect(p.tags, ['Standing']);
-      // There is deliberately no credit-price concept on Pose.
       expect(p.imageUrl, isNotEmpty);
+      // Pose participates in the credit system: null = category default (free).
+      expect(p.creditPrice, isNull);
+    });
+
+    test('pose carries an admin-set credit price when provided', () {
+      final p = Pose.fromJson({
+        'id': 'p2', 'title': 'Editorial', 'image_url': 'u', 'credit_price': 5,
+      });
+      expect(p.creditPrice, 5);
     });
   });
 }

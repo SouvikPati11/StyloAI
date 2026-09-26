@@ -27,8 +27,12 @@ export class GeminiProvider implements ImageGenerationProvider {
 
   constructor(private readonly config: ConfigService) {
     this.apiKey = this.config.get<string>('GEMINI_API_KEY');
+    // Current GA image-generation/editing model ("Nano Banana"). The old
+    // `gemini-2.0-flash-preview-image-generation` preview is retired and 404s.
+    // The deploy also auto-selects a valid image model from the live Gemini
+    // ListModels API and sets GEMINI_MODEL, so this is just a sane fallback.
     this.model =
-      this.config.get<string>('GEMINI_MODEL') || 'gemini-2.0-flash-preview-image-generation';
+      this.config.get<string>('GEMINI_MODEL') || 'gemini-2.5-flash-image';
     this.timeoutMs = Number(this.config.get<string>('GEMINI_TIMEOUT_MS') ?? '60000');
   }
 

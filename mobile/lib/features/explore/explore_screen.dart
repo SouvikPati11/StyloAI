@@ -232,7 +232,16 @@ class _PoseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
     return GestureDetector(
-      onTap: () => context.push('/create/pose'),
+      onTap: () {
+        final q = <String, String>{
+          'poseId': pose.id,
+          if (pose.creditPrice != null) 'price': '${pose.creditPrice}',
+        };
+        final qs = q.entries
+            .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+            .join('&');
+        context.push('/create/pose?$qs');
+      },
       child: Card(
         child: Padding(
           padding: const EdgeInsets.all(AppSpace.md),
@@ -263,7 +272,11 @@ class _PoseCard extends StatelessWidget {
                                 .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(AppRadii.pill),
                           ),
-                          child: Text('Free',
+                          // Free by default; shows the credit price if the admin set one.
+                          child: Text(
+                              (pose.creditPrice == null || pose.creditPrice == 0)
+                                  ? 'Free'
+                                  : '${pose.creditPrice} cr',
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.secondary,
                                   fontWeight: FontWeight.w700,

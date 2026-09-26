@@ -26,15 +26,19 @@ class BrandLogo extends StatelessWidget {
 }
 
 /// The "StyloAI" wordmark — "Stylo" in ink/ivory, "AI" in champagne gold, echoing
-/// the logo. [onDark] switches the base color for dark canvases.
+/// the logo. By default it adapts to the current theme brightness so it is
+/// always legible; [onDark] can force the dark-canvas palette. This prevents the
+/// header wordmark from rendering dark-navy text on the dark-navy background.
 class StyloWordmark extends StatelessWidget {
   final double size;
-  final bool onDark;
-  const StyloWordmark({super.key, this.size = 26, this.onDark = false});
+  final bool? onDark;
+  const StyloWordmark({super.key, this.size = 26, this.onDark});
   @override
   Widget build(BuildContext context) {
-    final base = onDark ? AppColors.inkDark : AppColors.ink;
-    final gold = onDark ? AppColors.accentDark : AppColors.accent;
+    final dark =
+        onDark ?? (Theme.of(context).brightness == Brightness.dark);
+    final base = dark ? AppColors.inkDark : AppColors.ink;
+    final gold = dark ? AppColors.accentDark : AppColors.accent;
     TextStyle s(Color c) => GoogleFonts.fraunces(
         fontSize: size, fontWeight: FontWeight.w600, letterSpacing: -0.3, color: c);
     return Text.rich(TextSpan(children: [

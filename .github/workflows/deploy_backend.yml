@@ -229,6 +229,29 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_JSON_VAL=$(getp FIREBASE_SERVICE_ACCOUNT_JSON)
           GEMINI_API_KEY_VAL=$(getp GEMINI_API_KEY)
 
+          # Auto-select a VALID Gemini image model from the live ListModels API.
+          # The old 'gemini-2.0-flash-preview-image-generation' preview is retired
+          # and 404s (root cause of "We couldn't create that look"). The API key
+          # is used only inside the URL and is NEVER echoed; only model NAMES
+          # (non-secret) are printed.
+          GEMINI_MODEL_VAL="gemini-2.5-flash-image"
+          if [ -n "$GEMINI_API_KEY_VAL" ]; then
+            MODELS_JSON=$(curl -s --max-time 20 "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY_VAL}" 2>/dev/null)
+            NAMES=$(printf '%s' "$MODELS_JSON" | grep -oE '"name"[ ]*:[ ]*"models/[^"]+"' | sed -E 's/.*models\/([^"]+)".*/\1/')
+            PICK=""
+            for pref in gemini-2.5-flash-image gemini-2.5-flash-image-preview; do
+              if printf '%s\n' "$NAMES" | grep -qx "$pref"; then PICK="$pref"; break; fi
+            done
+            if [ -z "$PICK" ]; then
+              PICK=$(printf '%s\n' "$NAMES" | grep -iE 'flash.*image|image.*flash|image-generation' | head -1)
+            fi
+            if [ -n "$PICK" ]; then GEMINI_MODEL_VAL="$PICK"; fi
+            echo "[deploy] gemini image models available: $(printf '%s ' $(printf '%s\n' "$NAMES" | grep -i image))"
+            echo "[deploy] gemini model selected: $GEMINI_MODEL_VAL"
+          else
+            echo "[deploy] GEMINI_API_KEY empty — using fallback model $GEMINI_MODEL_VAL"
+          fi
+
           # Written by redirection (values are never echoed to stdout).
           cat > .env <<ENVFILE
           NODE_ENV=production
@@ -250,7 +273,7 @@ jobs:
 
           FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID_VAL}
           GEMINI_API_KEY=${GEMINI_API_KEY_VAL}
-          GEMINI_MODEL=gemini-2.0-flash-preview-image-generation
+          GEMINI_MODEL=${GEMINI_MODEL_VAL}
           GEMINI_TIMEOUT_MS=60000
 
           AWS_REGION=ap-south-1
@@ -581,6 +604,36 @@ jobs:
               && echo "revoked public tcp/3000 on $sg" || echo "no public tcp/3000 rule to revoke on $sg (or not permitted)"
           done
           exit 0
+
+      # Ensure the media bucket allows browser PUT/GET from the admin origin, so
+      # the admin panel's presigned S3 uploads (Poses + Trending images) work.
+      # Idempotent; integrated here rather than left as a manual step. Best-effort
+      # (warns if the deploy role lacks s3:PutBucketCors). No secrets printed.
+      - name: Ensure S3 CORS for admin uploads
+        env:
+          AWS_REGION: ap-south-1
+          S3_BUCKET: styloai-prod-assets-2026
+          ADMIN_ORIGIN: https://api.souvikpati.in
+        run: |
+          set +e
+          cat > /tmp/s3-cors.json <<JSON
+          { "CORSRules": [ {
+              "AllowedOrigins": ["$ADMIN_ORIGIN"],
+              "AllowedMethods": ["PUT", "GET"],
+              "AllowedHeaders": ["*"],
+              "ExposeHeaders": ["ETag"],
+              "MaxAgeSeconds": 3000
+          } ] }
+          JSON
+          OUT=$(aws s3api put-bucket-cors --bucket "$S3_BUCKET" --region "$AWS_REGION" \
+            --cors-configuration file:///tmp/s3-cors.json 2>&1)
+          if [ $? -ne 0 ]; then
+            echo "::warning::Could not set S3 CORS on $S3_BUCKET (deploy role may lack s3:PutBucketCors). Apply manually per docs/S3_CORS_ADMIN_UPLOAD.md. Detail: $OUT"
+            exit 0
+          fi
+          echo "S3 CORS ensured on $S3_BUCKET for origin $ADMIN_ORIGIN."
+          # Show the effective rule (non-secret) for evidence.
+          aws s3api get-bucket-cors --bucket "$S3_BUCKET" --region "$AWS_REGION" 2>/dev/null || true
 
       # Authoritative external verification from the GitHub runner (real public
       # internet, not the instance). Fails the deploy if the permanent public

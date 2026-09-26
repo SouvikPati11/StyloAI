@@ -147,6 +147,7 @@ export class GenerationsProcessor extends WorkerHost implements OnModuleInit {
         },
       });
       stage('completed');
+      this.heartbeat.markSuccess();
       await this.notifications.notify({
         userId: generation.userId,
         type: 'generation_completed',
@@ -181,10 +182,13 @@ export class GenerationsProcessor extends WorkerHost implements OnModuleInit {
     const code = isProvider ? (err as ProviderError).code : 'provider_error';
     const refundEligible = isProvider ? (err as ProviderError).refundEligible : true;
     const attemptsLeft = job.attemptsMade + 1 < (job.opts.attempts ?? 1);
+    // Record the non-secret failure stage/code so /v1/gen-health surfaces the
+    // real reason (e.g. provider_error from a deprecated model) without logs.
+    this.heartbeat.markFailure(isProvider ? 'provider' : 'worker', code);
 
     this.logger.warn(
-      `Generation ${generationId} failed (${code}); attempt ${job.attemptsMade + 1}. ` +
-        (attemptsLeft ? 'Will retry.' : 'Final attempt.'),
+      `[generation] id=${generationId} stage=failed code=${code} attempt=${job.attemptsMade + 1} ` +
+        (attemptsLeft ? 'will_retry' : 'final'),
     );
 
     if (attemptsLeft && code !== 'safety_blocked' && code !== 'not_configured') {

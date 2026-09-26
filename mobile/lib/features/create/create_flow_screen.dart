@@ -23,12 +23,14 @@ class CreateFlowScreen extends ConsumerStatefulWidget {
   /// generation from that record (authoritative) and [styleCost] is shown.
   final String? presetKey;
   final String? trendingContentId;
+  final String? poseId;
   final int? styleCost;
   const CreateFlowScreen({
     super.key,
     required this.type,
     this.presetKey,
     this.trendingContentId,
+    this.poseId,
     this.styleCost,
   });
   @override
@@ -49,6 +51,7 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   /// Set when the flow was opened for a specific admin Trending Style, so the
   /// backend can price/configure it authoritatively.
   String? _trendingContentId;
+  String? _poseId;
   int? _styleCostOverride;
 
   bool _submitting = false;
@@ -60,6 +63,7 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
     if (!_ct.supportsReference) _mode = _Mode.explore;
     _presetKey = widget.presetKey;
     _trendingContentId = widget.trendingContentId;
+    _poseId = widget.poseId;
     _styleCostOverride = widget.styleCost;
   }
 
@@ -115,7 +119,8 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   bool get _canGenerate {
     if (_userPhoto == null) return false;
     if (_mode == _Mode.upload) return _referenceImage != null;
-    return _presetKey != null;
+    // Explore: a preset, a specific admin style, or a specific pose is enough.
+    return _presetKey != null || _trendingContentId != null || _poseId != null;
   }
 
   Future<void> _generate(int? cost) async {
@@ -148,6 +153,7 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
             referenceKey: referenceKey,
             trendingContentId:
                 _mode == _Mode.explore ? _trendingContentId : null,
+            poseId: _mode == _Mode.explore ? _poseId : null,
             idempotencyKey: const Uuid().v4(),
           );
 
@@ -262,14 +268,14 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
-    // Pose is free; a selected admin style uses its authoritative price; else the
-    // per-category cost from server config. The client never computes the charge.
-    final cost = _ct.type == 'pose'
-        ? 0
-        : (_trendingContentId != null && _styleCostOverride != null
-            ? _styleCostOverride
-            : config.maybeWhen(
-                data: (c) => c.costFor(_ct.type), orElse: () => null));
+    // Price shown to the user (backend remains authoritative for the real
+    // charge): a selected admin style/pose uses its own price when provided,
+    // otherwise the per-category cost from server config. Never hardcoded.
+    final cost = (_styleCostOverride != null &&
+            (_trendingContentId != null || _poseId != null))
+        ? _styleCostOverride
+        : config.maybeWhen(
+            data: (c) => c.costFor(_ct.type), orElse: () => null);
     final categories = config.maybeWhen(
       data: (c) => c.sections[_ct.type] ?? const <Category>[],
       orElse: () => const <Category>[],

@@ -38,6 +38,8 @@ class TrendingDto {
   // Authoritative per-item credit price. 0 = free (where allowed). Never trusted
   // from the client at generation time — only set here by an admin.
   @IsOptional() @IsInt() @Min(0) credit_price?: number;
+  // Featured in the Home "Trending" slider (admin-controlled).
+  @IsOptional() @IsBoolean() is_trending?: boolean;
   @IsOptional() @IsInt() position?: number;
   @IsOptional() @IsBoolean() is_active?: boolean;
 }
@@ -48,6 +50,8 @@ class PoseDto {
   @IsString() @IsNotEmpty() image_s3_key!: string;
   @IsOptional() @IsString() pose_type?: string;
   @IsOptional() @IsArray() @IsString({ each: true }) tags?: string[];
+  // Per-pose credit price (0/blank = category default). Backend-authoritative.
+  @IsOptional() @IsInt() @Min(0) credit_price?: number;
   @IsOptional() @IsInt() position?: number;
   @IsOptional() @IsBoolean() is_active?: boolean;
 }
@@ -102,6 +106,7 @@ export class AdminContentController {
         presetKey: dto.preset_key,
         categoryId: dto.category_id,
         creditPrice: dto.credit_price ?? null,
+        isTrending: dto.is_trending ?? false,
         position: dto.position ?? 0,
         isActive: dto.is_active ?? true,
         createdBy: admin.adminId,
@@ -124,6 +129,7 @@ export class AdminContentController {
         ...(dto.image_s3_key ? { imageS3Key: dto.image_s3_key } : {}),
         ...(dto.preset_key !== undefined ? { presetKey: dto.preset_key } : {}),
         ...(dto.credit_price !== undefined ? { creditPrice: dto.credit_price } : {}),
+        ...(dto.is_trending !== undefined ? { isTrending: dto.is_trending } : {}),
         ...(dto.position !== undefined ? { position: dto.position } : {}),
         ...(dto.is_active !== undefined ? { isActive: dto.is_active } : {}),
       },
@@ -201,6 +207,7 @@ export class AdminContentController {
         imageS3Key: dto.image_s3_key,
         poseType: dto.pose_type,
         tags: dto.tags ?? [],
+        creditPrice: dto.credit_price ?? null,
         position: dto.position ?? 0,
         isActive: dto.is_active ?? true,
         createdBy: admin.adminId,
@@ -220,6 +227,7 @@ export class AdminContentController {
         ...(dto.image_s3_key ? { imageS3Key: dto.image_s3_key } : {}),
         ...(dto.pose_type !== undefined ? { poseType: dto.pose_type } : {}),
         ...(dto.tags !== undefined ? { tags: dto.tags } : {}),
+        ...(dto.credit_price !== undefined ? { creditPrice: dto.credit_price } : {}),
         ...(dto.position !== undefined ? { position: dto.position } : {}),
         ...(dto.is_active !== undefined ? { isActive: dto.is_active } : {}),
       },

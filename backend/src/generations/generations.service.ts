@@ -68,6 +68,16 @@ export class GenerationsService {
       presetKey = style.presetKey ?? presetKey;
       styleDescriptor = style.description ?? undefined;
       priceOverride = style.creditPrice;
+    } else if (dto.pose_id) {
+      // A specific reference Pose was chosen. Pose fully participates in the
+      // credit system: its per-pose price (or the category default) applies.
+      const pose = await this.prisma.pose.findFirst({
+        where: { id: dto.pose_id, isActive: true },
+      });
+      if (!pose) throw AppException.notFound('Selected pose is unavailable.');
+      type = GenerationType.pose;
+      styleDescriptor = pose.description ?? undefined;
+      priceOverride = pose.creditPrice;
     }
 
     if (!(await this.settings.isFeatureEnabled(type))) {
@@ -90,14 +100,13 @@ export class GenerationsService {
       throw AppException.validation('preset_key is required in explore mode.');
     }
 
-    // Backend is the single source of truth for price:
-    //  - Pose is always free.
-    //  - A referenced Trending Style uses its configured price when set.
-    //  - Otherwise the per-type credit cost from system settings applies.
+    // Backend is the single source of truth for price. Priority:
+    //  1) an explicit per-item price (Trending Style or Pose), when set;
+    //  2) otherwise the admin-configured per-type default (system settings).
+    // Pose participates fully: it defaults to the credit_costs.pose value
+    // (0 = free by default) and an admin can raise it per-pose or per-type.
     const cost =
-      type === GenerationType.pose
-        ? 0
-        : priceOverride ?? (await this.settings.costFor(type as keyof CreditCosts));
+      priceOverride ?? (await this.settings.costFor(type as keyof CreditCosts));
 
     // Fast-fail on balance before creating anything (skipped for free content).
     const balance = await this.credits.getBalance(userId);

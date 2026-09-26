@@ -107,6 +107,9 @@ class TrendingItem {
   /// Authoritative per-item credit price. null = use the category default; the
   /// client never decides the charge — the backend prices by this item's id.
   final int? creditPrice;
+
+  /// Featured in the Home "Trending" slider (admin-controlled).
+  final bool isTrending;
   final String imageUrl;
   TrendingItem({
     required this.id,
@@ -117,6 +120,7 @@ class TrendingItem {
     this.tags = const [],
     this.presetKey,
     this.creditPrice,
+    this.isTrending = false,
     required this.imageUrl,
   });
   factory TrendingItem.fromJson(Map<String, dynamic> j) => TrendingItem(
@@ -128,6 +132,7 @@ class TrendingItem {
         tags: ((j['tags'] as List?) ?? const []).cast<String>(),
         presetKey: j['preset_key'] as String?,
         creditPrice: (j['credit_price'] as num?)?.toInt(),
+        isTrending: (j['is_trending'] ?? false) as bool,
         imageUrl: j['image_url'] as String,
       );
 }
@@ -140,6 +145,10 @@ class Pose {
   final String? description;
   final String? poseType;
   final List<String> tags;
+
+  /// Per-pose credit price. null = category default (free by default). The
+  /// backend is authoritative for the actual charge.
+  final int? creditPrice;
   final String imageUrl;
   Pose({
     required this.id,
@@ -147,6 +156,7 @@ class Pose {
     this.description,
     this.poseType,
     this.tags = const [],
+    this.creditPrice,
     required this.imageUrl,
   });
   factory Pose.fromJson(Map<String, dynamic> j) => Pose(
@@ -155,6 +165,7 @@ class Pose {
         description: j['description'] as String?,
         poseType: j['pose_type'] as String?,
         tags: ((j['tags'] as List?) ?? const []).cast<String>(),
+        creditPrice: (j['credit_price'] as num?)?.toInt(),
         imageUrl: j['image_url'] as String,
       );
 }

@@ -1,0 +1,64 @@
+name: gen_selftest
+
+# On-demand REAL AI-generation self-test. Runs scripts/gen-selftest.mjs on the
+# production instance via SSM (isolated test user + real image + real Gemini),
+# then prints a non-secret JSON summary. Manual trigger only.
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  selftest:
+    name: Real generation self-test on EC2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ap-south-1
+          audience: sts.amazonaws.com
+
+      - name: Run generation self-test via SSM
+        env:
+          AWS_REGION: ap-south-1
+          INSTANCE_ID: i-03d7204a2d92df8ac
+          APP_DIR: /home/ec2-user/StyloAI/backend
+        run: |
+          set -e
+          # The remote script loads .env itself; no secrets pass through SSM.
+          read -r -d '' REMOTE <<'REMOTE_EOF' || true
+          set -e
+          cd /home/ec2-user/StyloAI/backend
+          echo "[selftest] node=$(node -v) model=$(grep -E '^GEMINI_MODEL=' .env | sed 's/^GEMINI_MODEL=//')"
+          timeout 200 node scripts/gen-selftest.mjs 2>&1 | tail -60
+          REMOTE_EOF
+          CMD_ID=$(aws ssm send-command \
+            --region "$AWS_REGION" \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --comment "StyloAI generation self-test" \
+            --parameters "$(jq -n --arg s "$REMOTE" '{commands: [$s]}')" \
+            --timeout-seconds 600 \
+            --query Command.CommandId --output text)
+          echo "SSM CommandId: $CMD_ID"
+          # Poll for completion.
+          for _ in $(seq 1 60); do
+            sleep 6
+            ST=$(aws ssm get-command-invocation --region "$AWS_REGION" \
+              --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            [ "$ST" = "Success" ] || [ "$ST" = "Failed" ] || [ "$ST" = "TimedOut" ] || [ "$ST" = "Cancelled" ] && break
+          done
+          echo "Final SSM status: $ST"
+          echo "----- remote output -----"
+          aws ssm get-command-invocation --region "$AWS_REGION" \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardOutputContent --output text 2>/dev/null || true
+          echo "----- remote errors -----"
+          aws ssm get-command-invocation --region "$AWS_REGION" \
+            --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query StandardErrorContent --output text 2>/dev/null || true

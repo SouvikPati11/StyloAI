@@ -91,6 +91,7 @@ class GenerationRepository {
     String? presetKey,
     String? referenceKey,
     String? trendingContentId,
+    String? poseId,
     String? resolution,
     required String idempotencyKey,
   }) async {
@@ -102,9 +103,10 @@ class GenerationRepository {
       'user_photo_key': userPhotoKey,
       if (presetKey != null) 'preset_key': presetKey,
       if (referenceKey != null) 'reference_key': referenceKey,
-      // When a specific admin-created style is chosen, the backend prices and
-      // configures the generation from this id — never from the client.
+      // When a specific admin-created style/pose is chosen, the backend prices
+      // and configures the generation from its id — never from the client.
       if (trendingContentId != null) 'trending_content_id': trendingContentId,
+      if (poseId != null) 'pose_id': poseId,
       'options': {'resolution': resolution ?? 'standard'},
     });
     // Submit returns { generation_id, status, credit_cost }; fetch full state.

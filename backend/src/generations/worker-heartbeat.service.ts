@@ -12,6 +12,8 @@ export class WorkerHeartbeatService {
   private _lastError: string | null = null;
   private _lastJobAt: Date | null = null;
   private _processed = 0;
+  private _lastFailure: { stage: string; code: string; at: Date } | null = null;
+  private _lastSuccessAt: Date | null = null;
 
   setReady() {
     this._ready = true;
@@ -34,6 +36,15 @@ export class WorkerHeartbeatService {
     this._processed += 1;
   }
 
+  /** Record the exact non-secret failure stage + code of the last generation. */
+  markFailure(stage: string, code: string) {
+    this._lastFailure = { stage, code: code.slice(0, 60), at: new Date() };
+  }
+
+  markSuccess() {
+    this._lastSuccessAt = new Date();
+  }
+
   snapshot() {
     return {
       worker_ready: this._ready,
@@ -41,6 +52,9 @@ export class WorkerHeartbeatService {
       worker_last_job_at: this._lastJobAt,
       worker_jobs_processed: this._processed,
       worker_last_error: this._lastError,
+      worker_last_success_at: this._lastSuccessAt,
+      // Non-secret: which stage failed + the typed error code (e.g. provider_error).
+      last_generation_failure: this._lastFailure,
     };
   }
 }

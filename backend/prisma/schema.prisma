@@ -346,6 +346,9 @@ model TrendingContent {
   // Authoritative per-item credit price. When null, the backend falls back to
   // the per-type credit cost from system_settings. Never set by the client.
   creditPrice Int?           @map("credit_price")
+  // When true, this style is featured in the app's Home "Trending" slider (in
+  // addition to appearing in its category section). Admin-controlled.
+  isTrending  Boolean        @default(false) @map("is_trending")
   position    Int            @default(0)
   isActive    Boolean        @default(true) @map("is_active")
   startsAt    DateTime?      @map("starts_at") @db.Timestamptz(6)
@@ -371,6 +374,10 @@ model Pose {
   imageS3Key  String   @map("image_s3_key")
   poseType    String?  @map("pose_type")
   tags        String[] @default([])
+  // Per-pose credit price. null = use the category default (credit_costs.pose).
+  // Pose fully participates in the credit system; default resolves to free (0)
+  // but an admin can set any price and generation charges it authoritatively.
+  creditPrice Int?     @map("credit_price")
   position    Int      @default(0)
   isActive    Boolean  @default(true) @map("is_active")
   createdBy   String?  @map("created_by") @db.Uuid

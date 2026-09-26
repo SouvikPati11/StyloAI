@@ -76,6 +76,7 @@ GoRouter buildRouter(WidgetRef ref) {
             type: s.pathParameters['type']!,
             presetKey: q['preset'],
             trendingContentId: q['styleId'],
+            poseId: q['poseId'],
             styleCost: price,
           );
         },

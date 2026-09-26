@@ -21,6 +21,13 @@ export class CreateGenerationDto {
    */
   @IsOptional() @IsString() trending_content_id?: string;
 
+  /**
+   * Optional reference to an admin-created Pose. When present the backend forces
+   * type=pose, uses the pose's description in the prompt, and prices it from the
+   * pose's own credit price (or the category default) — client never sets it.
+   */
+  @IsOptional() @IsString() pose_id?: string;
+
   /** The user's own photo (S3 key from /uploads/presign). Identity anchor. */
   @IsString() @IsNotEmpty() user_photo_key!: string;
 

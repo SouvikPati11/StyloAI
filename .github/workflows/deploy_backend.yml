@@ -361,6 +361,26 @@ jobs:
           # definitive, runtime token-verification proof runs from the CI runner
           # after Nginx is up (see the "Verify Firebase Admin" step in the job).
 
+          # ---- SAFE worker-consumption self-test ---------------------------------
+          # Prove the running BullMQ worker actually CONSUMES jobs from Redis, not
+          # merely that Redis is reachable. Enqueue a job for a non-existent
+          # generation id: the processor increments its counter, finds no such row,
+          # and drops it — so NO Gemini call, NO credits, NO user data touched. We
+          # then confirm the worker's processed counter advanced via gen-health.
+          if [ "$REDIS_HOST_CHECK" = "127.0.0.1" ] || [ "$REDIS_HOST_CHECK" = "localhost" ]; then
+            echo "[deploy] worker self-test: enqueuing a bogus (safely-dropped) job…"
+            BEFORE=$(curl -s --max-time 5 http://127.0.0.1:3000/v1/gen-health | sed -E 's/.*"worker_jobs_processed":([0-9]+).*/\1/' || echo 0)
+            node -e "const {Queue}=require('bullmq'); const q=new Queue('generation',{connection:{host:'127.0.0.1',port:6379,maxRetriesPerRequest:null}}); q.add('generate',{generationId:'00000000-0000-0000-0000-000000000000'},{removeOnComplete:true,removeOnFail:true}).then(()=>q.close()).then(()=>process.exit(0)).catch(e=>{console.error(String(e));process.exit(1)});" \
+              && echo "[deploy] bogus job enqueued." || echo "::warning::could not enqueue worker self-test job."
+            WORKER_OK=0
+            for _ in $(seq 1 8); do
+              AFTER=$(curl -s --max-time 5 http://127.0.0.1:3000/v1/gen-health | sed -E 's/.*"worker_jobs_processed":([0-9]+).*/\1/' || echo 0)
+              if [ "${AFTER:-0}" -gt "${BEFORE:-0}" ] 2>/dev/null; then WORKER_OK=1; echo "[deploy] worker consumed a job (processed ${BEFORE}→${AFTER})."; break; fi
+              sleep 1
+            done
+            [ "$WORKER_OK" = "1" ] || echo "::warning::worker did not report consuming the self-test job within timeout."
+          fi
+
           # ============ Nginx TLS reverse proxy for api.souvikpati.in ========
           # Permanent edge: https://api.souvikpati.in -> 127.0.0.1:3000 (NestJS).
           # DNS already resolves to this instance and a Let's Encrypt certificate
@@ -726,9 +746,8 @@ jobs:
           if ! grep -q '"queue_reachable":true' /tmp/gh.out; then
             echo "::error::Generation queue (Redis) is NOT reachable — submitted generations would never process. Check Redis provisioning / REDIS_URL."; exit 1
           fi
-          # Worker connection is asynchronous; report it but do not hard-fail on a
-          # race where CI probes microseconds before the worker 'ready' event.
-          if ! grep -q '"worker_ready":true' /tmp/gh.out; then
-            echo "::warning::Worker not reported ready yet at probe time (may still be connecting). queue_reachable is true, so Redis is up."
+          # worker_running is a reliable liveness signal (worker.isRunning()).
+          if ! grep -q '"worker_running":true' /tmp/gh.out; then
+            echo "::error::BullMQ worker is not running — jobs would enqueue but never be consumed."; exit 1
           fi
-          echo "OK: generation pipeline operational — provider configured, queue reachable."
+          echo "OK: generation pipeline operational — provider configured, queue reachable, worker running."

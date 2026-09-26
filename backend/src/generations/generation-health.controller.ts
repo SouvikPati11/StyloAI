@@ -5,6 +5,7 @@ import { Queue } from 'bullmq';
 import { IMAGE_PROVIDER, ImageGenerationProvider } from '../ai/types';
 import { GENERATION_QUEUE, GenerationJobData } from './generations.constants';
 import { WorkerHeartbeatService } from './worker-heartbeat.service';
+import { GenerationsProcessor } from './generations.processor';
 
 /**
  * Non-secret operational readiness probe for the AI generation pipeline. Reports
@@ -20,8 +21,18 @@ export class GenerationHealthController {
     @Inject(IMAGE_PROVIDER) private readonly provider: ImageGenerationProvider,
     @InjectQueue(GENERATION_QUEUE) private readonly queue: Queue<GenerationJobData>,
     private readonly heartbeat: WorkerHeartbeatService,
+    private readonly processor: GenerationsProcessor,
     private readonly config: ConfigService,
   ) {}
+
+  /** Reliable worker liveness: is the BullMQ worker running right now? */
+  private workerRunning(): boolean {
+    try {
+      return this.processor.worker?.isRunning() ?? false;
+    } catch {
+      return false;
+    }
+  }
 
   /** Redis host/port/tls with the password stripped — safe to expose. */
   private redisInfo() {
@@ -72,6 +83,7 @@ export class GenerationHealthController {
       provider_configured: this.provider.isConfigured ?? false,
       model: this.provider.model ?? null,
       queue_reachable: queueReachable,
+      worker_running: this.workerRunning(),
       job_counts: counts,
       ...this.redisInfo(),
       ...this.heartbeat.snapshot(),

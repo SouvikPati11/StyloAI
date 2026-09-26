@@ -47,6 +47,9 @@ import { HealthController } from './health/health.controller';
             username: url.username || undefined,
             password: url.password || undefined,
             tls: url.protocol === 'rediss:' ? {} : undefined,
+            // Required by BullMQ for its blocking worker connection; also keeps
+            // commands from failing spuriously during brief reconnects.
+            maxRetriesPerRequest: null,
           },
         };
       },

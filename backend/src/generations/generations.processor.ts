@@ -1,5 +1,5 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject, Logger } from '@nestjs/common';
+import { Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { GenerationInputRole, GenerationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -9,6 +9,7 @@ import { IMAGE_PROVIDER, ImageGenerationProvider, ProviderError, ImageData } fro
 import { buildPrompt } from '../ai/identity-preservation';
 import { NotificationsService } from '../engagement/notifications.service';
 import { GENERATION_QUEUE, GenerationJobData } from './generations.constants';
+import { WorkerHeartbeatService } from './worker-heartbeat.service';
 
 /**
  * Async worker: runs a queued generation. Fetches inputs from S3, builds the
@@ -17,7 +18,7 @@ import { GENERATION_QUEUE, GenerationJobData } from './generations.constants';
  * per generation; safe to retry. See docs/GEMINI_INTEGRATION.md §4.
  */
 @Processor(GENERATION_QUEUE)
-export class GenerationsProcessor extends WorkerHost {
+export class GenerationsProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(GenerationsProcessor.name);
 
   constructor(
@@ -25,12 +26,34 @@ export class GenerationsProcessor extends WorkerHost {
     private readonly storage: StorageService,
     private readonly credits: CreditsService,
     private readonly notifications: NotificationsService,
+    private readonly heartbeat: WorkerHeartbeatService,
     @Inject(IMAGE_PROVIDER) private readonly provider: ImageGenerationProvider,
   ) {
     super();
   }
 
+  /**
+   * Track the worker's Redis connection so gen-health reports real worker
+   * readiness (not just that the process booted). Errors are surfaced (their
+   * short code) rather than silently swallowed.
+   */
+  onModuleInit() {
+    const w = this.worker;
+    if (!w) return;
+    w.on('ready', () => {
+      this.heartbeat.setReady();
+      this.logger.log('[generation] worker connected to Redis and ready.');
+    });
+    w.on('error', (err: Error) => {
+      this.heartbeat.setError(err?.message ?? 'worker error');
+      this.logger.error(`[generation] worker Redis error: ${err?.message ?? err}`);
+    });
+    w.on('closing', () => this.heartbeat.setClosed());
+    w.on('ioredis:close', () => this.heartbeat.setClosed());
+  }
+
   async process(job: Job<GenerationJobData>): Promise<void> {
+    this.heartbeat.markJob();
     const { generationId } = job.data;
     const generation = await this.prisma.generation.findUnique({
       where: { id: generationId },

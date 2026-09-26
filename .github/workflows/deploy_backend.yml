@@ -152,7 +152,50 @@ jobs:
           }
           RDS_HOST_VAL=$(getp RDS_HOST)
           RDS_PASSWORD_VAL=$(getp RDS_PASSWORD)
-          REDIS_URL_VAL=$(getp REDIS_URL)
+          REDIS_URL_VAL=$(getp_opt REDIS_URL)
+          # The generation queue REQUIRES a reachable Redis. This is a single-EC2
+          # deployment with services on loopback, so when no external Redis URL is
+          # provided we default to a LOCAL Redis and provision it below. This is
+          # the safest production-compatible option within the existing
+          # architecture (no new AWS resource, no public exposure, no SG change).
+          if [ -z "$REDIS_URL_VAL" ]; then
+            REDIS_URL_VAL="redis://127.0.0.1:6379"
+            echo "[deploy] REDIS_URL not set — defaulting to local loopback Redis."
+          fi
+          # Provision a local Redis ONLY when the target is loopback (an external
+          # Redis endpoint is left untouched).
+          REDIS_HOST_CHECK=$(printf '%s' "$REDIS_URL_VAL" | sed -E 's#^[a-z]+://([^@]*@)?([^:/]+).*#\2#')
+          if [ "$REDIS_HOST_CHECK" = "127.0.0.1" ] || [ "$REDIS_HOST_CHECK" = "localhost" ]; then
+            echo "[deploy] ensuring local Redis (loopback) for the generation queue…"
+            if ! command -v redis6-server >/dev/null 2>&1 && ! command -v redis-server >/dev/null 2>&1 && ! command -v valkey-server >/dev/null 2>&1; then
+              timeout 180 dnf install -y redis6 >/dev/null 2>&1 \
+                || timeout 180 dnf install -y valkey valkey-compat >/dev/null 2>&1 \
+                || timeout 180 dnf install -y redis >/dev/null 2>&1 || true
+            fi
+            REDIS_SVC=""
+            for s in redis6 valkey redis; do
+              if systemctl list-unit-files 2>/dev/null | grep -q "^$s\.service"; then REDIS_SVC=$s; break; fi
+            done
+            if [ -n "$REDIS_SVC" ]; then
+              systemctl enable "$REDIS_SVC" >/dev/null 2>&1 || true
+              systemctl restart "$REDIS_SVC" 2>/dev/null || systemctl start "$REDIS_SVC" 2>/dev/null || true
+              echo "[deploy] redis service: $REDIS_SVC"
+            else
+              echo "::warning::Could not install a local Redis package (redis6/valkey/redis). The generation queue will be unreachable until Redis is provided."
+            fi
+            REDIS_CLI=""
+            for c in redis6-cli redis-cli valkey-cli; do
+              if command -v "$c" >/dev/null 2>&1; then REDIS_CLI=$c; break; fi
+            done
+            if [ -n "$REDIS_CLI" ]; then
+              for i in 1 2 3 4 5 6; do
+                if "$REDIS_CLI" -h 127.0.0.1 -p 6379 ping 2>/dev/null | grep -q PONG; then
+                  echo "[deploy] local Redis responded PONG."; break
+                fi
+                sleep 1
+              done
+            fi
+          fi
           JWT_ACCESS_SECRET_VAL=$(getp JWT_ACCESS_SECRET)
           JWT_REFRESH_SECRET_VAL=$(getp JWT_REFRESH_SECRET)
           FIREBASE_PROJECT_ID_VAL=$(getp FIREBASE_PROJECT_ID)
@@ -636,24 +679,29 @@ jobs:
           fi
           echo "OK: invalid token reached Firebase Admin verification and was rejected with 401."
 
-      # Non-secret AI generation readiness — LAST so it can never affect the
-      # critical checks above. The probe is bounded server-side and cannot hang.
-      # A missing provider key or unreachable queue is a WARNING (not a hard
-      # failure): it is exactly what would silently break generation, surfaced
-      # without blocking the deploy. No secret/API key is ever printed.
-      - name: Verify AI generation readiness (provider + queue)
+      # AI generation readiness GATE — LAST so it can never affect the critical
+      # auth checks above. The probe is bounded server-side and cannot hang. This
+      # now HARD-FAILS the deploy when the generation pipeline is not operational
+      # (provider unconfigured, queue/Redis unreachable, or endpoint not 200), so
+      # a broken generation pipeline can never ship silently. No secret is printed.
+      - name: Verify AI generation readiness (provider + queue) [gate]
         run: |
           set -e
           url="https://api.souvikpati.in/v1/gen-health"
           code=$(curl -s -o /tmp/gh.out -w '%{http_code}' --max-time 25 "$url" || echo 000)
           echo "gen-health http=$code body=$(cat /tmp/gh.out 2>/dev/null || true)"
           if [ "$code" != "200" ]; then
-            echo "::warning::/v1/gen-health did not return 200 (got $code)."; exit 0
+            echo "::error::/v1/gen-health did not return 200 (got $code)."; exit 1
           fi
           if ! grep -q '"provider_configured":true' /tmp/gh.out; then
-            echo "::warning::AI provider is NOT configured (no GEMINI_API_KEY). Outfit/Hair/Glasses generations will fail with not_configured until the key is set."
+            echo "::error::AI provider is NOT configured (no GEMINI_API_KEY). Set the GEMINI_API_KEY GitHub secret."; exit 1
           fi
           if ! grep -q '"queue_reachable":true' /tmp/gh.out; then
-            echo "::warning::Generation queue (Redis) is NOT reachable. Submitted generations will stay queued and never process — check REDIS_URL."
+            echo "::error::Generation queue (Redis) is NOT reachable — submitted generations would never process. Check Redis provisioning / REDIS_URL."; exit 1
           fi
-          echo "OK: generation readiness reported (see body above; provider key is never printed)."
+          # Worker connection is asynchronous; report it but do not hard-fail on a
+          # race where CI probes microseconds before the worker 'ready' event.
+          if ! grep -q '"worker_ready":true' /tmp/gh.out; then
+            echo "::warning::Worker not reported ready yet at probe time (may still be connecting). queue_reachable is true, so Redis is up."
+          fi
+          echo "OK: generation pipeline operational — provider configured, queue reachable."

@@ -147,7 +147,10 @@ export class GenerationsService {
     // instead: refund any hold, mark the generation failed, and return a clear
     // error — so a queue/Redis outage never silently consumes credits or hangs.
     try {
-      await this.queue.add(
+      // Bounded: with maxRetriesPerRequest:null a down Redis would make add()
+      // hang, so race it against a short timeout to fail fast into the refund
+      // path below rather than leaving the request (and the user) hanging.
+      const add = this.queue.add(
         'generate',
         { generationId: generation.id },
         {
@@ -158,6 +161,13 @@ export class GenerationsService {
           removeOnFail: 500,
         },
       );
+      add.catch(() => undefined); // never an unhandled rejection if we time out first
+      await Promise.race([
+        add,
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('enqueue_timeout')), 5000),
+        ),
+      ]);
     } catch (err) {
       this.logger.error(
         `[generation] id=${generation.id} stage=enqueue failed — queue unreachable`,

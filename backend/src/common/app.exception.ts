@@ -52,4 +52,13 @@ export class AppException extends HttpException {
   static conflict(code: ErrorCode, message: string, details?: Record<string, unknown>) {
     return new AppException(code, message, HttpStatus.CONFLICT, details);
   }
+
+  /** A dependency (e.g. the job queue) is temporarily unavailable. */
+  static unavailable(message = 'Service temporarily unavailable.') {
+    return new AppException(
+      ErrorCode.GENERATION_FAILED,
+      message,
+      HttpStatus.SERVICE_UNAVAILABLE,
+    );
+  }
 }

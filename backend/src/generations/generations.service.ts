@@ -142,17 +142,45 @@ export class GenerationsService {
       }
     }
 
-    await this.queue.add(
-      'generate',
-      { generationId: generation.id },
-      {
-        jobId: generation.id,
-        attempts: 2,
-        backoff: { type: 'exponential', delay: 3000 },
-        removeOnComplete: true,
-        removeOnFail: 500,
-      },
-    );
+    // Enqueue the worker job. If the queue (Redis) is unreachable, the job would
+    // never run and the user would be left on an endless "Generating…". Fail fast
+    // instead: refund any hold, mark the generation failed, and return a clear
+    // error — so a queue/Redis outage never silently consumes credits or hangs.
+    try {
+      await this.queue.add(
+        'generate',
+        { generationId: generation.id },
+        {
+          jobId: generation.id,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 3000 },
+          removeOnComplete: true,
+          removeOnFail: 500,
+        },
+      );
+    } catch (err) {
+      this.logger.error(
+        `[generation] id=${generation.id} stage=enqueue failed — queue unreachable`,
+      );
+      if (cost > 0) {
+        await this.credits
+          .refund({
+            userId,
+            generationId: generation.id,
+            reason: 'Refund: generation could not be queued (service unavailable).',
+          })
+          .catch(() => undefined);
+      }
+      await this.prisma.generation
+        .update({
+          where: { id: generation.id },
+          data: { status: GenerationStatus.failed, errorCode: 'enqueue_failed' },
+        })
+        .catch(() => undefined);
+      throw AppException.unavailable(
+        'Generation is temporarily unavailable. Your credits were not charged. Please try again shortly.',
+      );
+    }
 
     return {
       generation_id: generation.id,

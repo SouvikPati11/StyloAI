@@ -100,14 +100,23 @@ class TrendingItem {
   final String section;
   final String title;
   final String? subtitle;
+  final String? description;
+  final List<String> tags;
   final String? presetKey;
+
+  /// Authoritative per-item credit price. null = use the category default; the
+  /// client never decides the charge — the backend prices by this item's id.
+  final int? creditPrice;
   final String imageUrl;
   TrendingItem({
     required this.id,
     required this.section,
     required this.title,
     this.subtitle,
+    this.description,
+    this.tags = const [],
     this.presetKey,
+    this.creditPrice,
     required this.imageUrl,
   });
   factory TrendingItem.fromJson(Map<String, dynamic> j) => TrendingItem(
@@ -115,7 +124,37 @@ class TrendingItem {
         section: j['section'] as String,
         title: j['title'] as String,
         subtitle: j['subtitle'] as String?,
+        description: j['description'] as String?,
+        tags: ((j['tags'] as List?) ?? const []).cast<String>(),
         presetKey: j['preset_key'] as String?,
+        creditPrice: (j['credit_price'] as num?)?.toInt(),
+        imageUrl: j['image_url'] as String,
+      );
+}
+
+/// A reference pose — a SEPARATE, FREE content type. No credit price. The app
+/// shows the image + name + short instruction so the user understands the pose.
+class Pose {
+  final String id;
+  final String title;
+  final String? description;
+  final String? poseType;
+  final List<String> tags;
+  final String imageUrl;
+  Pose({
+    required this.id,
+    required this.title,
+    this.description,
+    this.poseType,
+    this.tags = const [],
+    required this.imageUrl,
+  });
+  factory Pose.fromJson(Map<String, dynamic> j) => Pose(
+        id: j['id'] as String,
+        title: j['title'] as String,
+        description: j['description'] as String?,
+        poseType: j['pose_type'] as String?,
+        tags: ((j['tags'] as List?) ?? const []).cast<String>(),
         imageUrl: j['image_url'] as String,
       );
 }

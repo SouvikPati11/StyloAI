@@ -334,26 +334,51 @@ model Category {
 }
 
 model TrendingContent {
-  id         String         @id @default(uuid()) @db.Uuid
-  section    ContentSection
-  categoryId String?        @map("category_id") @db.Uuid
-  title      String
-  subtitle   String?
-  imageS3Key String         @map("image_s3_key")
-  presetKey  String?        @map("preset_key")
-  position   Int            @default(0)
-  isActive   Boolean        @default(true) @map("is_active")
-  startsAt   DateTime?      @map("starts_at") @db.Timestamptz(6)
-  endsAt     DateTime?      @map("ends_at") @db.Timestamptz(6)
-  createdBy  String?        @map("created_by") @db.Uuid
-  createdAt  DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String         @id @default(uuid()) @db.Uuid
+  section     ContentSection
+  categoryId  String?        @map("category_id") @db.Uuid
+  title       String
+  subtitle    String?
+  description String?
+  tags        String[]       @default([])
+  imageS3Key  String         @map("image_s3_key")
+  presetKey   String?        @map("preset_key")
+  // Authoritative per-item credit price. When null, the backend falls back to
+  // the per-type credit cost from system_settings. Never set by the client.
+  creditPrice Int?           @map("credit_price")
+  position    Int            @default(0)
+  isActive    Boolean        @default(true) @map("is_active")
+  startsAt    DateTime?      @map("starts_at") @db.Timestamptz(6)
+  endsAt      DateTime?      @map("ends_at") @db.Timestamptz(6)
+  createdBy   String?        @map("created_by") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   category Category?  @relation(fields: [categoryId], references: [id])
   author   AdminUser? @relation(fields: [createdBy], references: [id])
 
   @@index([section, isActive, position])
   @@map("trending_content")
+}
+
+/// Reference poses — a SEPARATE, FREE content type (not a paid trending style).
+/// A pose helps the user understand a body pose/framing before selecting it; it
+/// never carries a credit price and is excluded from the paid trending model.
+model Pose {
+  id          String   @id @default(uuid()) @db.Uuid
+  title       String
+  description String?
+  imageS3Key  String   @map("image_s3_key")
+  poseType    String?  @map("pose_type")
+  tags        String[] @default([])
+  position    Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([isActive, position])
+  @@map("poses")
 }
 
 // ---------------------------------------------------------------------------

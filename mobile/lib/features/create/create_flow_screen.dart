@@ -17,7 +17,20 @@ import 'create_types.dart';
 /// finishes, then opens the result. All states are handled explicitly.
 class CreateFlowScreen extends ConsumerStatefulWidget {
   final String type;
-  const CreateFlowScreen({super.key, required this.type});
+
+  /// Optional pre-selected style from an admin-created Trending Style. When
+  /// [trendingContentId] is set, the backend prices and configures the
+  /// generation from that record (authoritative) and [styleCost] is shown.
+  final String? presetKey;
+  final String? trendingContentId;
+  final int? styleCost;
+  const CreateFlowScreen({
+    super.key,
+    required this.type,
+    this.presetKey,
+    this.trendingContentId,
+    this.styleCost,
+  });
   @override
   ConsumerState<CreateFlowScreen> createState() => _CreateFlowScreenState();
 }
@@ -33,6 +46,11 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   _Mode _mode = _Mode.explore;
   String? _presetKey;
 
+  /// Set when the flow was opened for a specific admin Trending Style, so the
+  /// backend can price/configure it authoritatively.
+  String? _trendingContentId;
+  int? _styleCostOverride;
+
   bool _submitting = false;
   String _progressMessage = '';
 
@@ -40,6 +58,9 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   void initState() {
     super.initState();
     if (!_ct.supportsReference) _mode = _Mode.explore;
+    _presetKey = widget.presetKey;
+    _trendingContentId = widget.trendingContentId;
+    _styleCostOverride = widget.styleCost;
   }
 
   Future<File?> _pick(ImageSource source) async {
@@ -125,6 +146,8 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
             userPhotoKey: userKey,
             presetKey: _mode == _Mode.explore ? _presetKey : null,
             referenceKey: referenceKey,
+            trendingContentId:
+                _mode == _Mode.explore ? _trendingContentId : null,
             idempotencyKey: const Uuid().v4(),
           );
 
@@ -239,8 +262,14 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(appConfigProvider);
-    final cost =
-        config.maybeWhen(data: (c) => c.costFor(_ct.type), orElse: () => null);
+    // Pose is free; a selected admin style uses its authoritative price; else the
+    // per-category cost from server config. The client never computes the charge.
+    final cost = _ct.type == 'pose'
+        ? 0
+        : (_trendingContentId != null && _styleCostOverride != null
+            ? _styleCostOverride
+            : config.maybeWhen(
+                data: (c) => c.costFor(_ct.type), orElse: () => null));
     final categories = config.maybeWhen(
       data: (c) => c.sections[_ct.type] ?? const <Category>[],
       orElse: () => const <Category>[],
@@ -319,8 +348,13 @@ class _CreateFlowScreenState extends ConsumerState<CreateFlowScreen> {
         for (final c in categories)
           CategoryChip(
             label: c.label,
-            selected: _presetKey == c.key,
-            onTap: () => setState(() => _presetKey = c.key),
+            selected: _presetKey == c.key && _trendingContentId == null,
+            onTap: () => setState(() {
+              // Picking a catalog preset clears any specific admin-style binding.
+              _presetKey = c.key;
+              _trendingContentId = null;
+              _styleCostOverride = null;
+            }),
           ),
       ],
     );

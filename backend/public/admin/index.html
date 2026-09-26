@@ -235,13 +235,16 @@ let ADMIN = JSON.parse(localStorage.getItem('stylo_admin') || 'null');
 // Sidebar: only pages backed by real API functionality.
 const NAV = [
   { group: null, items: [ ['Dashboard','◧'] ] },
-  { group: 'Content', items: [ ['Trending Styles','✦'], ['Categories','▦'] ] },
+  { group: 'Content', items: [ ['Trending Styles','✦'], ['Poses','⛹'], ['Categories','▦'] ] },
   { group: 'People & activity', items: [ ['Users','◍'], ['Generations','❖'], ['Credits','◈'] ] },
   { group: 'System', items: [ ['Settings','⚙'], ['System Health','♥'] ] },
 ];
 let currentTab = 'Dashboard';
 
-const SECTIONS = ['outfit','hair','glasses','accessories','pose','ai_edit','inspiration'];
+// The five user-facing STYLE categories (Pose is a separate, free type; the old
+// "inspiration" category is retired). These drive the Trending Styles selectors.
+const SECTIONS = ['outfit','hair','glasses','accessories','ai_edit'];
+const SECTION_LABELS = { outfit:'Outfit', hair:'Hair', glasses:'Glasses', accessories:'Accessories', ai_edit:'AI Edit' };
 const GEN_STATUSES = ['queued','processing','succeeded','failed','refunded'];
 const GEN_TYPES = ['outfit','hair','glasses','accessories','pose','ai_edit'];
 const TXN_TYPES = ['signup_bonus','admin_grant','purchase','generation_hold','generation_settle','generation_refund','promo'];
@@ -310,8 +313,8 @@ function boot(){
 
 async function render(){
   const v = view(); v.innerHTML = loadingHTML();
-  const map = { 'Dashboard':renderDashboard, 'Trending Styles':renderTrending, 'Categories':renderCategories,
-    'Users':renderUsers, 'Generations':renderGenerations, 'Credits':renderTransactions,
+  const map = { 'Dashboard':renderDashboard, 'Trending Styles':renderTrending, 'Poses':renderPoses,
+    'Categories':renderCategories, 'Users':renderUsers, 'Generations':renderGenerations, 'Credits':renderTransactions,
     'Settings':renderSettings, 'System Health':renderHealth };
   const fn = map[currentTab] || renderDashboard;
   try { await fn(v); }
@@ -359,12 +362,15 @@ let trendFilter = '';
 async function renderTrending(v){
   const q = trendFilter ? '?section='+encodeURIComponent(trendFilter) : '';
   const items = await api('/admin/trending'+q);
-  const secOpts = ['<option value="">All sections</option>'].concat(SECTIONS.map(s=>`<option ${s===trendFilter?'selected':''}>${s}</option>`)).join('');
-  const rows = items.map((i,idx)=>`<tr>
+  const secOpts = ['<option value="">All categories</option>'].concat(SECTIONS.map(s=>`<option value="${s}" ${s===trendFilter?'selected':''}>${SECTION_LABELS[s]}</option>`)).join('');
+  const priceLabel = (p)=> p==null ? '<span class="muted">default</span>' : (p===0 ? '<span class="pill ok">free</span>' : ('<span class="gold">'+p+'</span>'));
+  const tagChips = (t)=> (t&&t.length) ? t.slice(0,4).map(x=>`<span class="pill neutral" style="margin:1px">${esc(x)}</span>`).join('') : '<span class="muted">—</span>';
+  const rows = items.map((i)=>`<tr>
     <td><img class="thumb" src="${esc(i.image_url)}" onerror="this.style.opacity=.25" alt=""/></td>
-    <td><strong>${esc(i.title)}</strong><div class="sub">${esc(i.subtitle||'')}</div></td>
-    <td><span class="pill neutral">${esc(i.section)}</span></td>
-    <td class="muted">${esc(i.presetKey||i.preset_key||'—')}</td>
+    <td><strong>${esc(i.title)}</strong><div class="sub">${esc(i.description||i.subtitle||'')}</div></td>
+    <td><span class="pill neutral">${esc(SECTION_LABELS[i.section]||i.section)}</span></td>
+    <td>${tagChips(i.tags)}</td>
+    <td>${priceLabel(i.creditPrice)}</td>
     <td>${i.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
     <td class="muted">${i.position??0}</td>
     <td><div class="btn-row">
@@ -376,15 +382,20 @@ async function renderTrending(v){
     </div></td></tr>`).join('');
 
   v.innerHTML = `
-    <div class="page-head"><div class="eyebrow">Content</div><h1>Trending Styles</h1><p>Publish curated styles to the app — changes appear instantly, no release needed.</p></div>
-    <div class="banner">Published styles surface in the app's <strong>Trending now</strong> and Explore. Hidden styles are kept but not shown.</div>
+    <div class="page-head"><div class="eyebrow">Content</div><h1>Trending Styles</h1><p>Publish curated styles under a category — Outfit · Hair · Glasses · Accessories · AI Edit. Changes appear instantly, no release needed.</p></div>
+    <div class="banner">Published styles surface in the app's Home category sections and Explore. Credit price is authoritative — the app charges what you set here (blank = category default, 0 = free).</div>
     <div class="card" style="margin-bottom:18px">
       <div class="row">
-        <div class="tight" style="min-width:170px"><label>Section</label><select id="c_section">${SECTIONS.map(s=>`<option>${s}</option>`).join('')}</select></div>
-        <div><label>Title</label><input id="c_title" placeholder="Autumn Editorial"/></div>
-        <div><label>Subtitle (optional)</label><input id="c_subtitle" placeholder="Warm tailored layers"/></div>
+        <div class="tight" style="min-width:170px"><label>Category</label><select id="c_section">${SECTIONS.map(s=>`<option value="${s}">${SECTION_LABELS[s]}</option>`).join('')}</select></div>
+        <div><label>Title / name</label><input id="c_title" placeholder="Black Streetwear"/></div>
+        <div><label>Subtitle (optional)</label><input id="c_subtitle" placeholder="Modern oversized layers"/></div>
       </div>
       <div class="row" style="margin-top:12px">
+        <div style="flex:2"><label>Description / prompt (used by AI generation)</label><input id="c_desc" placeholder="Modern oversized black streetwear outfit"/></div>
+        <div><label>Tags (comma-separated)</label><input id="c_tags" placeholder="Streetwear, Casual"/></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div><label>Credit price</label><input id="c_price" type="number" min="0" placeholder="default"/></div>
         <div><label>Preset key (optional)</label><input id="c_preset" placeholder="streetwear"/></div>
         <div><label>Position</label><input id="c_position" type="number" value="0" min="0"/></div>
         <div><label>Image</label><input id="c_file" type="file" accept="image/*"/></div>
@@ -392,12 +403,14 @@ async function renderTrending(v){
       </div>
       <div class="err-text" id="c_err"></div>
     </div>
-    <div class="wrap" style="margin-bottom:14px"><div style="max-width:220px"><label>Filter by section</label>
+    <div class="wrap" style="margin-bottom:14px"><div style="max-width:240px"><label>Filter by category</label>
       <select onchange="trendFilter=this.value; render();">${secOpts}</select></div></div>
     ${items.length ? `<div class="table-wrap"><table>
-      <thead><tr><th></th><th>Title</th><th>Section</th><th>Preset</th><th>Status</th><th>Pos</th><th></th></tr></thead>
+      <thead><tr><th></th><th>Title</th><th>Category</th><th>Tags</th><th>Price</th><th>Status</th><th>Pos</th><th></th></tr></thead>
       <tbody>${rows}</tbody></table></div>` : emptyHTML('✦','No trending styles yet','Publish your first style above to feature it in the app.')}`;
 }
+function parseTags(s){ return (s||'').split(',').map(x=>x.trim()).filter(Boolean); }
+function priceOrNull(s){ const t=(s||'').trim(); if(t==='') return null; const n=parseInt(t,10); return isNaN(n)?null:Math.max(0,n); }
 async function uploadImage(file){
   const p = await api('/admin/media/presign', { method:'POST', body: JSON.stringify({ content_type: file.type }) });
   const put = await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
@@ -413,11 +426,15 @@ async function createTrending(){
     if(!title){ throw new Error('Please enter a title.'); }
     if(!file){ throw new Error('Please choose an image.'); }
     const key = await uploadImage(file);
+    const price = priceOrNull(document.getElementById('c_price').value);
     await api('/admin/trending', { method:'POST', body: JSON.stringify({
       section: document.getElementById('c_section').value,
       title,
       subtitle: document.getElementById('c_subtitle').value || undefined,
+      description: document.getElementById('c_desc').value || undefined,
+      tags: parseTags(document.getElementById('c_tags').value),
       preset_key: document.getElementById('c_preset').value || undefined,
+      ...(price!=null ? { credit_price: price } : {}),
       position: parseInt(document.getElementById('c_position').value,10) || 0,
       image_s3_key: key,
     })});
@@ -434,9 +451,12 @@ async function delTrending(id){ if(!confirm('Delete this style? This cannot be u
 
 function editTrending(i){
   openModal(`<h3>Edit style</h3>
-    <label>Title</label><input id="e_title" value="${esc(i.title)}"/>
+    <label>Title / name</label><input id="e_title" value="${esc(i.title)}"/>
     <label style="margin-top:12px">Subtitle</label><input id="e_subtitle" value="${esc(i.subtitle||'')}"/>
-    <label style="margin-top:12px">Section</label><select id="e_section">${SECTIONS.map(s=>`<option ${s===i.section?'selected':''}>${s}</option>`).join('')}</select>
+    <label style="margin-top:12px">Description / prompt (used by AI generation)</label><input id="e_desc" value="${esc(i.description||'')}"/>
+    <label style="margin-top:12px">Tags (comma-separated)</label><input id="e_tags" value="${esc((i.tags||[]).join(', '))}"/>
+    <label style="margin-top:12px">Category</label><select id="e_section">${SECTIONS.map(s=>`<option value="${s}" ${s===i.section?'selected':''}>${SECTION_LABELS[s]}</option>`).join('')}</select>
+    <label style="margin-top:12px">Credit price (blank = category default, 0 = free)</label><input id="e_price" type="number" min="0" value="${i.creditPrice==null?'':i.creditPrice}"/>
     <label style="margin-top:12px">Preset key</label><input id="e_preset" value="${esc(i.presetKey||i.preset_key||'')}"/>
     <label style="margin-top:12px">Position</label><input id="e_position" type="number" value="${i.position??0}" min="0"/>
     <label style="margin-top:12px">Replace image (optional)</label><input id="e_file" type="file" accept="image/*"/>
@@ -448,8 +468,13 @@ async function saveTrending(id){
   const err=document.getElementById('e_err'); err.textContent='';
   const btn=document.getElementById('e_save'); btn.disabled=true; btn.textContent='Saving…';
   try{
+    // Blank price = category default (null); "0" = free; a number = that price.
+    const raw = document.getElementById('e_price').value.trim();
+    const credit_price = raw==='' ? null : Math.max(0, parseInt(raw,10)||0);
     const body = { title:document.getElementById('e_title').value.trim(), subtitle:document.getElementById('e_subtitle').value,
+      description:document.getElementById('e_desc').value, tags:parseTags(document.getElementById('e_tags').value),
       section:document.getElementById('e_section').value, preset_key:document.getElementById('e_preset').value,
+      credit_price,
       position: parseInt(document.getElementById('e_position').value,10)||0 };
     const file=document.getElementById('e_file').files[0];
     if(file){ body.image_s3_key = await uploadImage(file); }
@@ -462,7 +487,7 @@ async function saveTrending(id){
 async function renderCategories(v){
   const items = await api('/admin/categories');
   const rows = items.map(c=>`<tr>
-    <td><span class="pill neutral">${esc(c.section)}</span></td>
+    <td><span class="pill neutral">${esc(SECTION_LABELS[c.section]||c.section)}</span></td>
     <td><code style="color:var(--ink-soft)">${esc(c.key)}</code></td>
     <td><strong>${esc(c.label)}</strong></td>
     <td class="muted">${c.sortOrder??0}</td>
@@ -474,7 +499,7 @@ async function renderCategories(v){
   v.innerHTML = `
     <div class="page-head"><div class="eyebrow">Content</div><h1>Categories</h1><p>Category labels used by the app's Create & Explore sections. Labels here appear verbatim in the app.</p></div>
     <div class="card" style="margin-bottom:18px"><div class="row">
-      <div class="tight" style="min-width:160px"><label>Section</label><select id="cat_section">${GEN_TYPES.map(s=>`<option>${s}</option>`).join('')}</select></div>
+      <div class="tight" style="min-width:160px"><label>Category</label><select id="cat_section">${SECTIONS.map(s=>`<option value="${s}">${SECTION_LABELS[s]}</option>`).join('')}</select></div>
       <div><label>Key</label><input id="cat_key" placeholder="streetwear"/></div>
       <div><label>Label (shown in app)</label><input id="cat_label" placeholder="Streetwear"/></div>
       <div><label>Sort order</label><input id="cat_order" type="number" value="0" min="0"/></div>
@@ -493,6 +518,90 @@ async function createCat(){ const err=document.getElementById('cat_err'); err.te
 async function toggleCat(c){ try{ await api('/admin/categories',{method:'POST',body:JSON.stringify({
     section:c.section, key:c.key, label:c.label, sort_order:c.sortOrder??0, is_active:!c.isActive })}); toast(c.isActive?'Disabled':'Enabled'); render(); }catch(e){ toast(e.message,true); } }
 async function delCat(id){ if(!confirm('Delete this category?'))return; try{ await api('/admin/categories/'+id,{method:'DELETE'}); toast('Deleted'); render(); }catch(e){ toast(e.message,true); } }
+
+/* ---------- Poses (separate, FREE reference content) ---------- */
+async function renderPoses(v){
+  const items = await api('/admin/poses');
+  const tagChips = (t)=> (t&&t.length) ? t.slice(0,4).map(x=>`<span class="pill neutral" style="margin:1px">${esc(x)}</span>`).join('') : '<span class="muted">—</span>';
+  const rows = items.map(p=>`<tr>
+    <td><img class="thumb" src="${esc(p.image_url)}" onerror="this.style.opacity=.25" alt=""/></td>
+    <td><strong>${esc(p.title)}</strong><div class="sub">${esc(p.description||'')}</div></td>
+    <td class="muted">${esc(p.poseType||'—')}</td>
+    <td>${tagChips(p.tags)}</td>
+    <td>${p.isActive?'<span class="pill ok">active</span>':'<span class="pill err">hidden</span>'}</td>
+    <td class="muted">${p.position??0}</td>
+    <td><div class="btn-row">
+      <button class="secondary icon" onclick='togglePose(${JSON.stringify(p.id)},${!p.isActive})'>${p.isActive?'Hide':'Publish'}</button>
+      <button class="secondary icon" onclick='editPose(${JSON.stringify(p)})'>Edit</button>
+      <button class="danger icon" onclick='delPose(${JSON.stringify(p.id)})'>Delete</button>
+    </div></td></tr>`).join('');
+  v.innerHTML = `
+    <div class="page-head"><div class="eyebrow">Content</div><h1>Poses</h1><p>Reference poses are a separate, <strong>free</strong> content type — never charged and excluded from the paid trending model. Give each a clear name and a short instruction so users understand the pose.</p></div>
+    <div class="banner">Good poses read clearly, e.g. <em>“Confident Standing — stand upright, one shoulder slightly forward, look slightly away.”</em> Avoid vague names like “Pose 1”.</div>
+    <div class="card" style="margin-bottom:18px">
+      <div class="row">
+        <div><label>Title / name</label><input id="p_title" placeholder="Confident Standing"/></div>
+        <div><label>Type (optional)</label><input id="p_type" placeholder="Standing"/></div>
+        <div><label>Tags (comma-separated)</label><input id="p_tags" placeholder="Standing, Editorial"/></div>
+      </div>
+      <div class="row" style="margin-top:12px">
+        <div style="flex:2"><label>Description / instruction</label><input id="p_desc" placeholder="Stand upright with one shoulder slightly forward, keep one hand relaxed and look slightly away from the camera."/></div>
+        <div><label>Position</label><input id="p_position" type="number" value="0" min="0"/></div>
+        <div><label>Reference image</label><input id="p_file" type="file" accept="image/*"/></div>
+        <div class="tight"><label>&nbsp;</label><button id="p_add" onclick="createPose()">Add pose</button></div>
+      </div>
+      <div class="err-text" id="p_err"></div>
+    </div>
+    ${items.length ? `<div class="table-wrap"><table>
+      <thead><tr><th></th><th>Pose</th><th>Type</th><th>Tags</th><th>Status</th><th>Pos</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>` : emptyHTML('⛹','No poses yet','Add your first pose above — it will appear (free) in the app.')}`;
+}
+async function createPose(){
+  const err=document.getElementById('p_err'); err.textContent='';
+  const btn=document.getElementById('p_add'); btn.disabled=true; btn.textContent='Adding…';
+  try{
+    const file=document.getElementById('p_file').files[0];
+    const title=document.getElementById('p_title').value.trim();
+    if(!title) throw new Error('Please enter a pose name.');
+    if(!file) throw new Error('Please choose a reference image.');
+    const key=await uploadImage(file);
+    await api('/admin/poses',{method:'POST',body:JSON.stringify({
+      title, description:document.getElementById('p_desc').value || undefined,
+      pose_type:document.getElementById('p_type').value || undefined,
+      tags:parseTags(document.getElementById('p_tags').value),
+      position:parseInt(document.getElementById('p_position').value,10)||0,
+      image_s3_key:key })});
+    toast('Pose added'); render();
+  }catch(e){ err.textContent=e.message; }
+  finally{ btn.disabled=false; btn.textContent='Add pose'; }
+}
+async function togglePose(id, active){ try{ await api('/admin/poses/'+id,{method:'PUT',body:JSON.stringify({is_active:active})}); toast(active?'Published':'Hidden'); render(); }catch(e){ toast(e.message,true); } }
+async function delPose(id){ if(!confirm('Delete this pose?'))return; try{ await api('/admin/poses/'+id,{method:'DELETE'}); toast('Deleted'); render(); }catch(e){ toast(e.message,true); } }
+function editPose(p){
+  openModal(`<h3>Edit pose</h3>
+    <label>Title / name</label><input id="ep_title" value="${esc(p.title)}"/>
+    <label style="margin-top:12px">Type</label><input id="ep_type" value="${esc(p.poseType||'')}"/>
+    <label style="margin-top:12px">Description / instruction</label><input id="ep_desc" value="${esc(p.description||'')}"/>
+    <label style="margin-top:12px">Tags (comma-separated)</label><input id="ep_tags" value="${esc((p.tags||[]).join(', '))}"/>
+    <label style="margin-top:12px">Position</label><input id="ep_position" type="number" value="${p.position??0}" min="0"/>
+    <label style="margin-top:12px">Replace image (optional)</label><input id="ep_file" type="file" accept="image/*"/>
+    <div class="err-text" id="ep_err"></div>
+    <div class="btn-row" style="margin-top:18px;justify-content:flex-end"><button class="ghost" onclick="closeModal()">Cancel</button>
+      <button id="ep_save" onclick='savePose(${JSON.stringify(p.id)})'>Save changes</button></div>`);
+}
+async function savePose(id){
+  const err=document.getElementById('ep_err'); err.textContent='';
+  const btn=document.getElementById('ep_save'); btn.disabled=true; btn.textContent='Saving…';
+  try{
+    const body={ title:document.getElementById('ep_title').value.trim(), pose_type:document.getElementById('ep_type').value,
+      description:document.getElementById('ep_desc').value, tags:parseTags(document.getElementById('ep_tags').value),
+      position:parseInt(document.getElementById('ep_position').value,10)||0 };
+    const file=document.getElementById('ep_file').files[0];
+    if(file){ body.image_s3_key = await uploadImage(file); }
+    await api('/admin/poses/'+id,{method:'PUT',body:JSON.stringify(body)});
+    closeModal(); toast('Saved'); render();
+  }catch(e){ err.textContent=e.message; btn.disabled=false; btn.textContent='Save changes'; }
+}
 
 /* ---------- Users ---------- */
 async function renderUsers(v){
@@ -642,14 +751,17 @@ async function renderHealth(v){
     <div><strong style="margin-left:6px">${esc(label)}</strong><div class="muted" style="font-size:12.5px">${esc(detail)}</div></div></div></div>`;
   try {
     // These endpoints are intentionally public and expose no secrets.
-    const [health, fb] = await Promise.all([
+    const [health, fb, gen] = await Promise.all([
       fetch(API+'/health').then(r=>r.json()).catch(()=>null),
       fetch(API+'/auth/firebase-status').then(r=>r.json()).catch(()=>null),
+      fetch(API+'/gen-health').then(r=>r.json()).catch(()=>null),
     ]);
     let html = '';
     html += row('API', !!health, health ? ('HTTPS · '+location.host) : 'Unreachable');
     html += row('Database', health && health.db==='ok', health ? ('PostgreSQL · '+(health.db||'unknown')) : 'Unknown');
     html += row('Firebase Admin', !!(fb && fb.configured), fb && fb.configured ? ('Configured · project '+esc(fb.project_id||'—')) : 'Not configured');
+    html += row('AI provider', !!(gen && gen.provider_configured), gen ? ((gen.provider_configured?'Configured':'NOT configured')+' · '+esc(gen.provider||'?')+' · model '+esc(gen.model||'—')) : 'Unknown');
+    html += row('Generation queue', !!(gen && gen.queue_reachable), gen ? (gen.queue_reachable?('Reachable · '+JSON.stringify(gen.job_counts||{})):'Redis unreachable — generations will not process') : 'Unknown');
     html += `<div class="card"><div class="muted" style="font-size:12.5px">Last checked ${new Date().toLocaleTimeString()} · <a href="#" onclick="event.preventDefault();renderHealth(view())">Refresh</a></div></div>`;
     body.innerHTML = html;
   } catch(e){ body.innerHTML = errorHTML(e.message, 'renderHealth(view())'); }

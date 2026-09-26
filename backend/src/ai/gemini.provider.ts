@@ -22,7 +22,7 @@ export class GeminiProvider implements ImageGenerationProvider {
   readonly name = 'gemini';
   private readonly logger = new Logger(GeminiProvider.name);
   private readonly apiKey?: string;
-  private readonly model: string;
+  readonly model: string;
   private readonly timeoutMs: number;
 
   constructor(private readonly config: ConfigService) {

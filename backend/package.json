@@ -17,7 +17,8 @@
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "seed": "ts-node prisma/seed.ts",
-    "bootstrap:admin": "ts-node prisma/bootstrap-admin.ts"
+    "bootstrap:admin": "ts-node prisma/bootstrap-admin.ts",
+    "migrate:inspiration": "ts-node prisma/migrate-inspiration.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"

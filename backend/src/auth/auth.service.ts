@@ -15,6 +15,18 @@ export interface TokenPair {
   expires_in: number;
 }
 
+/** A friendly display name from an email local-part (e.g. jane.doe -> Jane Doe). */
+function deriveNameFromEmail(email?: string): string | undefined {
+  if (!email) return undefined;
+  const local = email.split('@')[0]?.replace(/[._-]+/g, ' ').trim();
+  if (!local) return undefined;
+  return local
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 /**
  * Auth flow: the app signs in with Firebase Google Sign-In and sends the
  * resulting ID token. We verify it, upsert the user by firebase_uid, grant the
@@ -41,17 +53,22 @@ export class AuthService {
       where: { firebaseUid: identity.uid },
     }));
 
+    // Prefer the Google display name; fall back to a friendly name derived from
+    // the email local-part so the app always has something to greet the user by.
+    const fallbackName = deriveNameFromEmail(identity.email);
     const user = await this.prisma.user.upsert({
       where: { firebaseUid: identity.uid },
       update: {
         email: identity.email,
-        displayName: identity.name,
+        // Only overwrite when Google actually provides a name, so a user's saved
+        // name is never wiped by a token that happens to omit the claim.
+        ...(identity.name ? { displayName: identity.name } : {}),
         avatarUrl: identity.picture,
       },
       create: {
         firebaseUid: identity.uid,
         email: identity.email,
-        displayName: identity.name,
+        displayName: identity.name ?? fallbackName,
         avatarUrl: identity.picture,
         profile: { create: {} },
         wallet: { create: {} },

@@ -71,4 +71,34 @@ describe('identity-preservation prompt', () => {
     expect(styleDescriptor).toBe(describePreset('streetwear'));
     expect(prompt).toContain('streetwear');
   });
+
+  it("uses an admin style's description (override) over the preset catalog", () => {
+    const override = 'Modern oversized black streetwear outfit';
+    const { prompt, styleDescriptor } = buildPrompt({
+      type: GenerationType.outfit,
+      mode: GenerationMode.explore,
+      presetKey: 'streetwear',
+      hasReference: false,
+      styleDescriptorOverride: override,
+    });
+    expect(styleDescriptor).toBe(override);
+    expect(prompt).toContain(override);
+    // The generic catalog descriptor is NOT used when an override is present.
+    expect(prompt).not.toContain('urban tones');
+  });
+
+  it('override wins even in reference_upload mode (admin content is authoritative)', () => {
+    const override = 'Modern low fade hairstyle';
+    const { prompt, styleDescriptor } = buildPrompt({
+      type: GenerationType.hair,
+      mode: GenerationMode.reference_upload,
+      presetKey: null,
+      hasReference: true,
+      styleDescriptorOverride: override,
+    });
+    expect(styleDescriptor).toBe(override);
+    expect(prompt).toContain(override);
+    // Still pins identity.
+    expect(prompt.toLowerCase()).toContain('facial features');
+  });
 });

@@ -52,8 +52,26 @@ export class GenerationsService {
     });
     if (existing) return this.presentSubmit(existing.id, userId);
 
-    if (!(await this.settings.isFeatureEnabled(dto.type))) {
-      throw AppException.featureDisabled(dto.type);
+    // Resolve the AUTHORITATIVE style from the database when an admin-created
+    // Trending Style is referenced. Its section (=type), preset, description and
+    // per-item price come from the DB record — never reconstructed on the client.
+    let type: GenerationType = dto.type;
+    let presetKey = dto.preset_key;
+    let styleDescriptor: string | undefined;
+    let priceOverride: number | null = null;
+    if (dto.trending_content_id) {
+      const style = await this.prisma.trendingContent.findFirst({
+        where: { id: dto.trending_content_id, isActive: true },
+      });
+      if (!style) throw AppException.notFound('Selected style is unavailable.');
+      type = style.section as unknown as GenerationType;
+      presetKey = style.presetKey ?? presetKey;
+      styleDescriptor = style.description ?? undefined;
+      priceOverride = style.creditPrice;
+    }
+
+    if (!(await this.settings.isFeatureEnabled(type))) {
+      throw AppException.featureDisabled(type);
     }
 
     // Validate inputs.
@@ -68,44 +86,60 @@ export class GenerationsService {
         throw AppException.validation('reference_key does not belong to you.');
       }
     }
-    if (dto.mode === GenerationMode.explore && !dto.preset_key) {
+    if (dto.mode === GenerationMode.explore && !presetKey && !dto.trending_content_id) {
       throw AppException.validation('preset_key is required in explore mode.');
     }
 
-    const cost = await this.settings.costFor(dto.type as keyof CreditCosts);
+    // Backend is the single source of truth for price:
+    //  - Pose is always free.
+    //  - A referenced Trending Style uses its configured price when set.
+    //  - Otherwise the per-type credit cost from system settings applies.
+    const cost =
+      type === GenerationType.pose
+        ? 0
+        : priceOverride ?? (await this.settings.costFor(type as keyof CreditCosts));
 
-    // Fast-fail on balance before creating anything.
+    // Fast-fail on balance before creating anything (skipped for free content).
     const balance = await this.credits.getBalance(userId);
-    if (balance < cost) throw AppException.insufficientCredits(cost, balance);
+    if (cost > 0 && balance < cost) throw AppException.insufficientCredits(cost, balance);
 
     // Create the generation + inputs, then hold credits (idempotent).
     const generation = await this.prisma.generation.create({
       data: {
         userId,
-        type: dto.type,
+        type,
         mode: dto.mode,
-        presetKey: dto.preset_key,
+        presetKey,
         status: GenerationStatus.queued,
         creditCost: cost,
         idempotencyKey,
-        params: { resolution: dto.options?.resolution ?? 'standard' },
+        params: {
+          resolution: dto.options?.resolution ?? 'standard',
+          ...(styleDescriptor ? { style_descriptor: styleDescriptor } : {}),
+          ...(dto.trending_content_id ? { trending_content_id: dto.trending_content_id } : {}),
+        },
         inputs: {
-          create: this.buildInputs(dto),
+          create: this.buildInputs(dto, type),
         },
       },
     });
 
-    try {
-      await this.credits.hold({
-        userId,
-        amount: cost,
-        generationId: generation.id,
-        idempotencyKey: `hold:${generation.id}`,
-      });
-    } catch (err) {
-      // Roll back the generation shell so a failed hold leaves no orphan.
-      await this.prisma.generation.delete({ where: { id: generation.id } }).catch(() => undefined);
-      throw err;
+    // Only hold credits for paid generations; free content never touches the ledger.
+    if (cost > 0) {
+      try {
+        await this.credits.hold({
+          userId,
+          amount: cost,
+          generationId: generation.id,
+          idempotencyKey: `hold:${generation.id}`,
+        });
+      } catch (err) {
+        // Roll back the generation shell so a failed hold leaves no orphan.
+        await this.prisma.generation
+          .delete({ where: { id: generation.id } })
+          .catch(() => undefined);
+        throw err;
+      }
     }
 
     await this.queue.add(
@@ -128,11 +162,11 @@ export class GenerationsService {
     };
   }
 
-  private buildInputs(dto: CreateGenerationDto) {
+  private buildInputs(dto: CreateGenerationDto, type: GenerationType) {
     const inputs: { role: GenerationInputRole; s3Key: string }[] = [
       { role: GenerationInputRole.user_photo, s3Key: dto.user_photo_key },
     ];
-    const refRole = REFERENCE_ROLE[dto.type];
+    const refRole = REFERENCE_ROLE[type];
     if (dto.mode === GenerationMode.reference_upload && dto.reference_key && refRole) {
       inputs.push({ role: refRole, s3Key: dto.reference_key });
     }

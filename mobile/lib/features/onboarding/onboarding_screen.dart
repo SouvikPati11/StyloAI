@@ -59,7 +59,7 @@ const _slides = <_Slide>[
     body:
         'Discover curated styles and fresh inspiration as the StyloAI library grows.',
     icon: Icons.trending_up_outlined,
-    tags: ['Trending', 'Inspiration', 'New looks'],
+    tags: ['Trending', 'Curated', 'New looks'],
   ),
 ];
 

@@ -56,6 +56,10 @@ export class ProviderError extends Error {
  */
 export interface ImageGenerationProvider {
   readonly name: string;
+  /** Whether the provider has the credentials it needs (non-secret boolean). */
+  readonly isConfigured?: boolean;
+  /** The model identifier in use (non-secret). */
+  readonly model?: string;
   edit(input: EditRequest): Promise<EditResult>;
 }
 

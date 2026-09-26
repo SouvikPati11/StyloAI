@@ -90,6 +90,7 @@ class GenerationRepository {
     required String userPhotoKey,
     String? presetKey,
     String? referenceKey,
+    String? trendingContentId,
     String? resolution,
     required String idempotencyKey,
   }) async {
@@ -101,6 +102,9 @@ class GenerationRepository {
       'user_photo_key': userPhotoKey,
       if (presetKey != null) 'preset_key': presetKey,
       if (referenceKey != null) 'reference_key': referenceKey,
+      // When a specific admin-created style is chosen, the backend prices and
+      // configures the generation from this id — never from the client.
+      if (trendingContentId != null) 'trending_content_id': trendingContentId,
       'options': {'resolution': resolution ?? 'standard'},
     });
     // Submit returns { generation_id, status, credit_cost }; fetch full state.
@@ -139,6 +143,14 @@ class ContentRepository {
     final res = await api.get('/recommendations');
     return ((res['items'] as List?) ?? [])
         .map((e) => TrendingItem.fromJson((e as Map).cast<String, dynamic>()))
+        .toList();
+  }
+
+  /// Reference poses — a separate, free content type (no credit price).
+  Future<List<Pose>> poses() async {
+    final res = await api.get('/poses');
+    return ((res['items'] as List?) ?? [])
+        .map((e) => Pose.fromJson((e as Map).cast<String, dynamic>()))
         .toList();
   }
 }

@@ -7,9 +7,26 @@ import '../../design/tokens.dart';
 import '../../state/providers.dart';
 import '../create/create_types.dart';
 
+/// The five user-facing style categories, in display order. Labels are the
+/// canonical app-side names; content itself comes entirely from the backend.
+const _kCategories = <(String, String)>[
+  ('outfit', 'Trending Outfit'),
+  ('hair', 'Trending Hair'),
+  ('glasses', 'Trending Glasses'),
+  ('accessories', 'Trending Accessories'),
+  ('ai_edit', 'AI Edit'),
+];
+
+/// All active trending styles, grouped by category. One fetch drives every Home
+/// section, so the sections are always exactly the backend's categories.
 final _homeTrendingProvider =
-    FutureProvider.autoDispose<List<TrendingItem>>((ref) async {
-  return ref.read(contentRepoProvider).trending();
+    FutureProvider.autoDispose<Map<String, List<TrendingItem>>>((ref) async {
+  final items = await ref.read(contentRepoProvider).trending();
+  final grouped = <String, List<TrendingItem>>{};
+  for (final it in items) {
+    (grouped[it.section] ??= []).add(it);
+  }
+  return grouped;
 });
 final _homeRecentProvider =
     FutureProvider.autoDispose<List<GenerationSummary>>((ref) async {
@@ -25,7 +42,9 @@ class HomeScreen extends ConsumerWidget {
     final me = auth.me;
     final t = Theme.of(context).textTheme;
     final greeting = _greeting();
-    final name = (me?.displayName ?? '').split(' ').first;
+    // Robust name: first name from the profile, else derived from the email
+    // local-part, else a friendly fallback — never null/empty/incorrect.
+    final name = _displayName(me);
 
     return Scaffold(
       body: SafeArea(
@@ -50,7 +69,7 @@ class HomeScreen extends ConsumerWidget {
               ),
               const SizedBox(height: AppSpace.xl),
               Text(greeting, style: t.bodySmall),
-              Text(name.isEmpty ? 'Welcome' : name, style: t.headlineMedium),
+              Text(name, style: t.headlineMedium),
               const SizedBox(height: AppSpace.xl),
               _ImproveCta(onTap: () => _openCreate(context)),
               const SizedBox(height: AppSpace.xl),
@@ -58,9 +77,8 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: AppSpace.md),
               _QuickCreateRow(),
               const SizedBox(height: AppSpace.xl),
-              const SectionHeader(title: 'Trending now'),
-              _TrendingStrip(),
-              const SizedBox(height: AppSpace.xl),
+              // One section per backend category; empty categories are hidden.
+              const _TrendingSections(),
               const SectionHeader(title: 'Your recent looks'),
               _RecentStrip(),
             ],
@@ -77,6 +95,22 @@ class HomeScreen extends ConsumerWidget {
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     return 'Good evening';
+  }
+
+  /// Resolves a friendly first name: the profile display name, else a name
+  /// derived from the email local-part, else "Welcome back" (loading/unknown).
+  static String _displayName(Me? me) {
+    final dn = (me?.displayName ?? '').trim();
+    if (dn.isNotEmpty) return dn.split(RegExp(r'\s+')).first;
+    final email = (me?.email ?? '').trim();
+    if (email.contains('@')) {
+      final local = email.split('@').first.replaceAll(RegExp(r'[._-]+'), ' ').trim();
+      if (local.isNotEmpty) {
+        final w = local.split(' ').first;
+        return w[0].toUpperCase() + w.substring(1);
+      }
+    }
+    return 'Welcome back';
   }
 }
 
@@ -171,52 +205,136 @@ class _QuickCreateRow extends StatelessWidget {
   }
 }
 
-class _TrendingStrip extends ConsumerWidget {
+/// One horizontal strip per backend category (Outfit/Hair/Glasses/…). Empty
+/// categories are hidden; when nothing is published at all, a single polished
+/// empty state is shown instead of broken sections.
+class _TrendingSections extends ConsumerWidget {
+  const _TrendingSections();
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_homeTrendingProvider);
-    return SizedBox(
-      height: 190,
-      child: async.when(
-        loading: () => const LoadingState(),
-        error: (e, _) => ErrorStateView(
-            message: '$e',
-            onRetry: () => ref.invalidate(_homeTrendingProvider)),
-        data: (items) {
-          if (items.isEmpty) {
-            return const EmptyState(
+    return async.when(
+      loading: () => const SizedBox(height: 190, child: LoadingState()),
+      error: (e, _) => SizedBox(
+        height: 190,
+        child: ErrorStateView(
+            message: '$e', onRetry: () => ref.invalidate(_homeTrendingProvider)),
+      ),
+      data: (grouped) {
+        final nonEmpty =
+            _kCategories.where((c) => (grouped[c.$1] ?? const []).isNotEmpty).toList();
+        if (nonEmpty.isEmpty) {
+          return const SizedBox(
+            height: 170,
+            child: EmptyState(
               icon: Icons.trending_up,
               title: 'No trending styles yet',
-              subtitle: 'New looks are curated regularly — check back soon.',
-            );
-          }
-          return ListView.separated(
-            scrollDirection: Axis.horizontal,
-            itemCount: items.length,
-            separatorBuilder: (_, __) => const SizedBox(width: AppSpace.md),
-            itemBuilder: (_, i) {
-              final item = items[i];
-              return GestureDetector(
-                onTap: () => context.push('/create/${item.section}'),
-                child: SizedBox(
-                  width: 140,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      RemoteImage(item.imageUrl, width: 140, height: 150),
-                      const SizedBox(height: 6),
-                      Text(item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              );
-            },
+              subtitle: 'Curated styles will appear here across categories soon.',
+            ),
           );
-        },
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final c in nonEmpty) ...[
+              SectionHeader(title: c.$2),
+              _CategoryStrip(items: grouped[c.$1]!),
+              const SizedBox(height: AppSpace.xl),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _CategoryStrip extends StatelessWidget {
+  final List<TrendingItem> items;
+  const _CategoryStrip({required this.items});
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 196,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: items.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppSpace.md),
+        itemBuilder: (_, i) => _TrendingCard(item: items[i]),
       ),
+    );
+  }
+}
+
+/// A trending style card — image, title, an optional tag, and the credit price
+/// (from the backend). Tapping opens the create flow bound to this style id so
+/// the backend prices it authoritatively.
+class _TrendingCard extends StatelessWidget {
+  final TrendingItem item;
+  const _TrendingCard({required this.item});
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return GestureDetector(
+      onTap: () {
+        final q = <String, String>{
+          'styleId': item.id,
+          if (item.presetKey != null) 'preset': item.presetKey!,
+          if (item.creditPrice != null) 'price': '${item.creditPrice}',
+        };
+        final qs = q.entries.map((e) => '${e.key}=${Uri.encodeComponent(e.value)}').join('&');
+        context.push('/create/${item.section}?$qs');
+      },
+      child: SizedBox(
+        width: 144,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Stack(
+              children: [
+                RemoteImage(item.imageUrl, width: 144, height: 150),
+                if (item.creditPrice != null)
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: item.creditPrice == 0
+                        ? const _MiniBadge(label: 'Free')
+                        : _MiniBadge(label: '${item.creditPrice}', icon: Icons.auto_awesome),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(item.title,
+                maxLines: 1, overflow: TextOverflow.ellipsis, style: t.bodySmall),
+            if (item.tags.isNotEmpty)
+              Text(item.tags.first,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.bodySmall?.copyWith(color: AppColors.mutedDark, fontSize: 11.5)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniBadge extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  const _MiniBadge({required this.label, this.icon});
+  @override
+  Widget build(BuildContext context) {
+    final gold = Theme.of(context).colorScheme.secondary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (icon != null) ...[Icon(icon, size: 11, color: gold), const SizedBox(width: 3)],
+        Text(label,
+            style: TextStyle(color: gold, fontWeight: FontWeight.w700, fontSize: 11)),
+      ]),
     );
   }
 }

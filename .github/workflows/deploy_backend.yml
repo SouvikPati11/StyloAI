@@ -561,6 +561,29 @@ jobs:
           fi
           echo "OK: bootstrap admin can log in (200). Token/body intentionally not printed."
 
+      # Verify the AI generation pipeline is ready (non-secret readiness probe).
+      # Reports whether the image provider has credentials and the model in use,
+      # and whether the Redis-backed job queue is reachable — the two things whose
+      # absence silently breaks generation. No secret/API key is ever printed. A
+      # missing provider key or unreachable queue is surfaced as a WARNING (not a
+      # hard failure) so a content/infra gap is visible without blocking deploys.
+      - name: Verify AI generation readiness (provider + queue)
+        run: |
+          set -e
+          url="https://api.souvikpati.in/v1/gen-health"
+          code=$(curl -s -o /tmp/gh.out -w '%{http_code}' --max-time 25 "$url" || echo 000)
+          echo "gen-health http=$code body=$(cat /tmp/gh.out 2>/dev/null || true)"
+          if [ "$code" != "200" ]; then
+            echo "::warning::/v1/gen-health did not return 200 (got $code)."; exit 0
+          fi
+          if ! grep -q '"provider_configured":true' /tmp/gh.out; then
+            echo "::warning::AI provider is NOT configured (no GEMINI_API_KEY). Outfit/Hair/Glasses generations will fail with not_configured until the key is set."
+          fi
+          if ! grep -q '"queue_reachable":true' /tmp/gh.out; then
+            echo "::warning::Generation queue (Redis) is NOT reachable. Submitted generations will stay queued and never process — check REDIS_URL."
+          fi
+          echo "OK: generation readiness reported (see body above; provider key is never printed)."
+
       # Prove the /v1/auth/google ROUTE reaches NestJS through Nginx — not just
       # /health. A malformed (no Firebase token) request must get an APPLICATION
       # HTTP status (400/401/422), which proves the proxy + routing + validation

@@ -69,7 +69,16 @@ GoRouter buildRouter(WidgetRef ref) {
       ),
       GoRoute(
         path: '/create/:type',
-        builder: (_, s) => CreateFlowScreen(type: s.pathParameters['type']!),
+        builder: (_, s) {
+          final q = s.uri.queryParameters;
+          final price = int.tryParse(q['price'] ?? '');
+          return CreateFlowScreen(
+            type: s.pathParameters['type']!,
+            presetKey: q['preset'],
+            trendingContentId: q['styleId'],
+            styleCost: price,
+          );
+        },
       ),
       GoRoute(
         path: '/result/:id',

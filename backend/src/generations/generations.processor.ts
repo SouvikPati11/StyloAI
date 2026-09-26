@@ -48,6 +48,12 @@ export class GenerationsProcessor extends WorkerHost {
       return;
     }
 
+    // Non-secret stage diagnostics — identify exactly where a generation breaks
+    // without leaking any image bytes, keys, tokens, or provider credentials.
+    const stage = (s: string, extra = '') =>
+      this.logger.log(`[generation] id=${generationId} type=${generation.type} stage=${s}${extra}`);
+    stage('request_received');
+
     await this.prisma.generation.update({
       where: { id: generationId },
       data: { status: GenerationStatus.processing, startedAt: new Date() },
@@ -61,16 +67,25 @@ export class GenerationsProcessor extends WorkerHost {
       const referenceInput = generation.inputs.find(
         (i) => i.role !== GenerationInputRole.user_photo,
       );
+      stage('content_loaded', ` inputs=${generation.inputs.length}`);
 
       const userPhoto = await this.loadImage(userPhotoInput.s3Key);
       const reference = referenceInput ? await this.loadImage(referenceInput.s3Key) : undefined;
+      stage('input_image_validated', ` bytes=${userPhoto.bytes.length} mime=${userPhoto.contentType}`);
+
+      const params = generation.params as {
+        resolution?: 'standard' | 'high';
+        style_descriptor?: string;
+      } | null;
 
       const { prompt, styleDescriptor } = buildPrompt({
         type: generation.type,
         mode: generation.mode,
         presetKey: generation.presetKey,
         hasReference: !!reference,
+        styleDescriptorOverride: params?.style_descriptor,
       });
+      stage('provider_request', ` provider=${this.provider.name} prompt_len=${prompt.length}`);
 
       const result = await this.provider.edit({
         type: generation.type,
@@ -78,9 +93,9 @@ export class GenerationsProcessor extends WorkerHost {
         reference,
         styleDescriptor,
         prompt,
-        resolution:
-          (generation.params as { resolution?: 'standard' | 'high' })?.resolution ?? 'standard',
+        resolution: params?.resolution ?? 'standard',
       });
+      stage('provider_response', ` images=${result.images.length}`);
 
       // Store outputs.
       for (let i = 0; i < result.images.length; i++) {
@@ -98,6 +113,7 @@ export class GenerationsProcessor extends WorkerHost {
         });
       }
 
+      stage('result_stored');
       await this.credits.settle(generation.id);
       await this.prisma.generation.update({
         where: { id: generation.id },
@@ -107,7 +123,7 @@ export class GenerationsProcessor extends WorkerHost {
           providerJobRef: this.provider.name,
         },
       });
-      this.logger.log(`Generation ${generation.id} succeeded.`);
+      stage('completed');
       await this.notifications.notify({
         userId: generation.userId,
         type: 'generation_completed',

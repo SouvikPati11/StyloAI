@@ -15,7 +15,8 @@ const DEFAULT_CREDIT_COSTS: CreditCosts = {
   hair: 4,
   glasses: 2,
   accessories: 2,
-  pose: 1,
+  // Pose is a free content type — it is never charged (see GenerationsService).
+  pose: 0,
   ai_edit: 3,
 };
 

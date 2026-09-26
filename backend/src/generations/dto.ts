@@ -13,6 +13,14 @@ export class CreateGenerationDto {
   /** Required in explore mode: which preset/category to apply. */
   @IsOptional() @IsString() preset_key?: string;
 
+  /**
+   * Optional authoritative reference to an admin-created Trending Style. When
+   * present, the backend loads that style and derives the type, preset, style
+   * description, and credit PRICE from the database record — the client is never
+   * trusted for the price. See GenerationsService.submit.
+   */
+  @IsOptional() @IsString() trending_content_id?: string;
+
   /** The user's own photo (S3 key from /uploads/presign). Identity anchor. */
   @IsString() @IsNotEmpty() user_photo_key!: string;
 

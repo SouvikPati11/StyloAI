@@ -110,18 +110,30 @@ export interface PromptContext {
   mode: GenerationMode;
   presetKey?: string | null;
   hasReference: boolean;
+  /**
+   * Explicit style description authored by an admin on the selected Trending
+   * Style. When present it takes precedence over the built-in preset catalog,
+   * so admin-created content actually drives the generation prompt.
+   */
+  styleDescriptorOverride?: string | null;
 }
 
 /**
  * Builds the full instruction: identity preamble + the type's target
- * instruction + the style source (a preset descriptor for explore mode, or a
- * reference-transfer instruction for upload mode).
+ * instruction + the style source. The style source is, in priority order:
+ * (1) the admin-authored description of the selected Trending Style, else
+ * (2) a reference-transfer instruction (reference_upload mode), else
+ * (3) a built-in preset descriptor for the section+preset.
  */
 export function buildPrompt(ctx: PromptContext): { prompt: string; styleDescriptor?: string } {
   const parts: string[] = [IDENTITY_PREAMBLE, TARGET_INSTRUCTION[ctx.type]];
   let styleDescriptor: string | undefined;
 
-  if (ctx.mode === 'reference_upload' && ctx.hasReference) {
+  const override = ctx.styleDescriptorOverride?.trim();
+  if (override) {
+    styleDescriptor = override;
+    parts.push(`Apply this style: ${override}.`);
+  } else if (ctx.mode === 'reference_upload' && ctx.hasReference) {
     parts.push(
       'A second image is provided as a style reference. Transfer its relevant characteristics ' +
         referenceAttributes(ctx.type) +

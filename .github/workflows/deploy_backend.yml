@@ -87,19 +87,20 @@ jobs:
           put JWT_REFRESH_SECRET   "$JWT_REFRESH_SECRET"
           put FIREBASE_PROJECT_ID  "$FIREBASE_PROJECT_ID"
           put FIREBASE_SERVICE_ACCOUNT_JSON "$FIREBASE_SERVICE_ACCOUNT_JSON"
-          # OpenAI (active provider). Published only when present so the deploy
-          # never fails for lack of it; the gen-health gate WARNS (does not block)
-          # when the provider is unconfigured, making the manual action visible.
+          # OpenAI (active provider). SSM SecureString values cannot be empty, so
+          # only publish the key when present; the deploy never fails for lack of
+          # it, and the gen-health gate WARNS (does not block) when the provider is
+          # unconfigured, making the manual action visible.
           if [ -n "${OPENAI_API_KEY:-}" ]; then
             put OPENAI_API_KEY "$OPENAI_API_KEY"
             echo "OPENAI_API_KEY provided — active image provider will be configured."
           else
-            put OPENAI_API_KEY ""
-            echo "::warning::OPENAI_API_KEY secret is empty. Add it in GitHub Actions secrets to enable image generation (server-side only)."
+            echo "::warning::OPENAI_API_KEY secret is empty. Add it in GitHub Actions secrets to enable image generation (server-side only). Deploy continues; generation stays disabled until then."
           fi
           put OPENAI_IMAGE_MODEL   "${OPENAI_IMAGE_MODEL:-gpt-image-1}"
-          # Gemini is kept only as an inactive alternative provider.
-          put GEMINI_API_KEY       "$GEMINI_API_KEY"
+          # Gemini is kept only as an inactive alternative provider (published only
+          # when the secret is present, since SSM rejects empty SecureStrings).
+          if [ -n "${GEMINI_API_KEY:-}" ]; then put GEMINI_API_KEY "$GEMINI_API_KEY"; fi
           # Admin bootstrap params are OPTIONAL — only published when provided, so
           # the deploy works with or without them. Stored as SecureString.
           if [ -n "${ADMIN_BOOTSTRAP_EMAIL:-}" ] && [ -n "${ADMIN_BOOTSTRAP_PASSWORD:-}" ]; then

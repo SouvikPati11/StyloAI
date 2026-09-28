@@ -56,11 +56,17 @@ class AppConfig {
   final List<String> resolutions;
   final Map<String, List<Category>> sections;
 
+  /// Admin-controlled ORDER of the Home category sliders (backend-driven). The
+  /// Home screen renders its category sliders in exactly this order; the app
+  /// never hard-codes it. Falls back to the canonical style order if absent.
+  final List<String> homeSections;
+
   AppConfig({
     required this.creditCosts,
     required this.features,
     required this.resolutions,
     required this.sections,
+    required this.homeSections,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> j) {
@@ -75,11 +81,17 @@ class AppConfig {
           .map((e) => Category.fromJson((e as Map).cast<String, dynamic>()))
           .toList();
     });
+    final home = ((j['home_sections'] as List?) ?? const [])
+        .whereType<String>()
+        .toList();
     return AppConfig(
       creditCosts: costs,
       features: feats,
       resolutions: ((j['resolutions'] as List?) ?? ['standard']).cast<String>(),
       sections: sections,
+      homeSections: home.isNotEmpty
+          ? home
+          : const ['outfit', 'hair', 'glasses', 'accessories', 'ai_edit'],
     );
   }
 

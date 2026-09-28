@@ -7,15 +7,20 @@ import '../../design/tokens.dart';
 import '../../state/providers.dart';
 import '../create/create_types.dart';
 
-/// The five user-facing style categories, in display order. Labels are the
-/// canonical app-side names; content itself comes entirely from the backend.
-const _kCategories = <(String, String)>[
-  ('outfit', 'Trending Outfit'),
-  ('hair', 'Trending Hair'),
-  ('glasses', 'Trending Glasses'),
-  ('accessories', 'Trending Accessories'),
-  ('ai_edit', 'AI Edit'),
-];
+/// Display labels for the style categories. The ORDER of the Home sliders is
+/// NOT hard-coded here — it comes from the backend (`/config` home_sections),
+/// so an admin can reorder the sliders without an app release. This map only
+/// supplies the human label for each section key.
+const _kCategoryLabels = <String, String>{
+  'outfit': 'Trending Outfit',
+  'hair': 'Trending Hair',
+  'glasses': 'Trending Glasses',
+  'accessories': 'Trending Accessories',
+  'ai_edit': 'AI Edit',
+};
+
+/// Fallback order used only until `/config` loads (or if it omits the order).
+const _kFallbackOrder = ['outfit', 'hair', 'glasses', 'accessories', 'ai_edit'];
 
 /// All active trending styles, grouped by category. One fetch drives every Home
 /// section, so the sections are always exactly the backend's categories.
@@ -213,6 +218,12 @@ class _TrendingSections extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(_homeTrendingProvider);
+    // Backend-driven slider order. Until /config resolves (or if it errors) we
+    // fall back to the canonical order so the Home screen never renders empty.
+    final order = ref.watch(appConfigProvider).maybeWhen(
+          data: (c) => c.homeSections,
+          orElse: () => _kFallbackOrder,
+        );
     return async.when(
       loading: () => const SizedBox(height: 190, child: LoadingState()),
       error: (e, _) => SizedBox(
@@ -221,8 +232,9 @@ class _TrendingSections extends ConsumerWidget {
             message: '$e', onRetry: () => ref.invalidate(_homeTrendingProvider)),
       ),
       data: (grouped) {
+        // Render exactly the admin-ordered sections that have published items.
         final nonEmpty =
-            _kCategories.where((c) => (grouped[c.$1] ?? const []).isNotEmpty).toList();
+            order.where((s) => (grouped[s] ?? const []).isNotEmpty).toList();
         if (nonEmpty.isEmpty) {
           return const SizedBox(
             height: 170,
@@ -233,9 +245,10 @@ class _TrendingSections extends ConsumerWidget {
             ),
           );
         }
-        // Featured "Trending" slider: admin-flagged items across categories.
+        // Featured "Trending" slider: admin-flagged items, gathered in the same
+        // admin-controlled category order (only Trending=ON items appear here).
         final featured = [
-          for (final c in _kCategories) ...(grouped[c.$1] ?? const <TrendingItem>[])
+          for (final s in order) ...(grouped[s] ?? const <TrendingItem>[])
         ].where((t) => t.isTrending).toList();
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,9 +258,9 @@ class _TrendingSections extends ConsumerWidget {
               _CategoryStrip(items: featured),
               const SizedBox(height: AppSpace.xl),
             ],
-            for (final c in nonEmpty) ...[
-              SectionHeader(title: c.$2),
-              _CategoryStrip(items: grouped[c.$1]!),
+            for (final s in nonEmpty) ...[
+              SectionHeader(title: _kCategoryLabels[s] ?? s),
+              _CategoryStrip(items: grouped[s]!),
               const SizedBox(height: AppSpace.xl),
             ],
           ],

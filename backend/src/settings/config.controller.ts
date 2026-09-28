@@ -17,7 +17,7 @@ export class ConfigController {
 
   @Get()
   async getConfig() {
-    const [creditCosts, features, aiConfig, categories] = await Promise.all([
+    const [creditCosts, features, aiConfig, categories, homeSections] = await Promise.all([
       this.settings.creditCosts(),
       this.settings.features(),
       this.settings.get<{ resolutions: string[] }>('ai_config', { resolutions: ['standard'] }),
@@ -26,6 +26,7 @@ export class ConfigController {
         orderBy: [{ section: 'asc' }, { sortOrder: 'asc' }],
         select: { section: true, key: true, label: true },
       }),
+      this.settings.homeSections(),
     ]);
 
     const sections: Record<string, { key: string; label: string }[]> = {};
@@ -38,6 +39,10 @@ export class ConfigController {
       features,
       resolutions: aiConfig.resolutions ?? ['standard'],
       sections,
+      // Admin-controlled ORDER of the Home category sliders (backend-driven, so
+      // the app never hard-codes it). The app renders its category sliders in
+      // exactly this order.
+      home_sections: homeSections,
     };
   }
 }

@@ -23,6 +23,17 @@ void main() {
       expect(config.isEnabled('hair'), false);
       expect(config.isEnabled('glasses'), true);
       expect(config.sections['outfit']!.first.label, 'Streetwear');
+      // No home_sections in this payload → canonical fallback order (never empty).
+      expect(config.homeSections,
+          ['outfit', 'hair', 'glasses', 'accessories', 'ai_edit']);
+    });
+
+    test('home_sections order is taken verbatim from the server (admin-controlled)', () {
+      final config = AppConfig.fromJson({
+        'home_sections': ['ai_edit', 'hair', 'outfit'],
+      });
+      // The app renders sliders in exactly this backend-driven order.
+      expect(config.homeSections, ['ai_edit', 'hair', 'outfit']);
     });
   });
 

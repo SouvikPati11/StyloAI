@@ -1,8 +1,9 @@
 name: gen_selftest
 
 # On-demand REAL AI-generation self-test. Runs scripts/gen-selftest.mjs on the
-# production instance via SSM (isolated test user + real image + real Gemini),
-# then prints a non-secret JSON summary. Manual trigger only.
+# production instance via SSM (isolated test user + real image + a real OpenAI
+# image call), then prints a non-secret JSON summary. Manual trigger only —
+# never run automatically on deploy, so no paid image call happens per deploy.
 on:
   workflow_dispatch:
 
@@ -33,10 +34,10 @@ jobs:
           read -r -d '' REMOTE <<'REMOTE_EOF' || true
           set -e
           cd /home/ec2-user/StyloAI/backend
-          echo "[selftest] node=$(node -v) model=$(grep -E '^GEMINI_MODEL=' .env | sed 's/^GEMINI_MODEL=//')"
+          echo "[selftest] node=$(node -v) provider=openai model=$(grep -E '^OPENAI_IMAGE_MODEL=' .env | sed 's/^OPENAI_IMAGE_MODEL=//')"
           timeout 200 node scripts/gen-selftest.mjs 2>&1 | tail -60
-          echo "----- recent backend Gemini/generation logs (non-secret) -----"
-          journalctl -u styloai-backend -n 400 --no-pager 2>/dev/null | grep -iE 'gemini|\[generation\]' | tail -25 || true
+          echo "----- recent backend provider/generation logs (non-secret) -----"
+          journalctl -u styloai-backend -n 400 --no-pager 2>/dev/null | grep -iE 'openai|gemini|\[generation\]' | tail -25 || true
           REMOTE_EOF
           CMD_ID=$(aws ssm send-command \
             --region "$AWS_REGION" \

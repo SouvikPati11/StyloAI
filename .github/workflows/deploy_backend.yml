@@ -48,6 +48,12 @@ jobs:
           JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          # OpenAI is the ACTIVE image-generation provider. The key stays
+          # server-side only (never shipped to the mobile app). OPENAI_IMAGE_MODEL
+          # is optional (defaults to gpt-image-1). GEMINI_API_KEY is retained as an
+          # inactive-provider fallback and only published when present.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_IMAGE_MODEL: ${{ secrets.OPENAI_IMAGE_MODEL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           # Optional first-admin bootstrap. Set these as GitHub Actions secrets to
           # create/rotate the initial admin panel account. Never printed.
@@ -81,6 +87,18 @@ jobs:
           put JWT_REFRESH_SECRET   "$JWT_REFRESH_SECRET"
           put FIREBASE_PROJECT_ID  "$FIREBASE_PROJECT_ID"
           put FIREBASE_SERVICE_ACCOUNT_JSON "$FIREBASE_SERVICE_ACCOUNT_JSON"
+          # OpenAI (active provider). Published only when present so the deploy
+          # never fails for lack of it; the gen-health gate WARNS (does not block)
+          # when the provider is unconfigured, making the manual action visible.
+          if [ -n "${OPENAI_API_KEY:-}" ]; then
+            put OPENAI_API_KEY "$OPENAI_API_KEY"
+            echo "OPENAI_API_KEY provided — active image provider will be configured."
+          else
+            put OPENAI_API_KEY ""
+            echo "::warning::OPENAI_API_KEY secret is empty. Add it in GitHub Actions secrets to enable image generation (server-side only)."
+          fi
+          put OPENAI_IMAGE_MODEL   "${OPENAI_IMAGE_MODEL:-gpt-image-1}"
+          # Gemini is kept only as an inactive alternative provider.
           put GEMINI_API_KEY       "$GEMINI_API_KEY"
           # Admin bootstrap params are OPTIONAL — only published when provided, so
           # the deploy works with or without them. Stored as SecureString.
@@ -227,30 +245,19 @@ jobs:
           JWT_REFRESH_SECRET_VAL=$(getp JWT_REFRESH_SECRET)
           FIREBASE_PROJECT_ID_VAL=$(getp FIREBASE_PROJECT_ID)
           FIREBASE_SERVICE_ACCOUNT_JSON_VAL=$(getp FIREBASE_SERVICE_ACCOUNT_JSON)
-          GEMINI_API_KEY_VAL=$(getp GEMINI_API_KEY)
-
-          # Auto-select a VALID Gemini image model from the live ListModels API.
-          # The old 'gemini-2.0-flash-preview-image-generation' preview is retired
-          # and 404s (root cause of "We couldn't create that look"). The API key
-          # is used only inside the URL and is NEVER echoed; only model NAMES
-          # (non-secret) are printed.
-          GEMINI_MODEL_VAL="gemini-2.5-flash-image"
-          if [ -n "$GEMINI_API_KEY_VAL" ]; then
-            MODELS_JSON=$(curl -s --max-time 20 "https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY_VAL}" 2>/dev/null)
-            NAMES=$(printf '%s' "$MODELS_JSON" | grep -oE '"name"[ ]*:[ ]*"models/[^"]+"' | sed -E 's/.*models\/([^"]+)".*/\1/')
-            PICK=""
-            for pref in gemini-2.5-flash-image gemini-2.5-flash-image-preview; do
-              if printf '%s\n' "$NAMES" | grep -qx "$pref"; then PICK="$pref"; break; fi
-            done
-            if [ -z "$PICK" ]; then
-              PICK=$(printf '%s\n' "$NAMES" | grep -iE 'flash.*image|image.*flash|image-generation' | head -1)
-            fi
-            if [ -n "$PICK" ]; then GEMINI_MODEL_VAL="$PICK"; fi
-            echo "[deploy] gemini image models available: $(printf '%s ' $(printf '%s\n' "$NAMES" | grep -i image))"
-            echo "[deploy] gemini model selected: $GEMINI_MODEL_VAL"
+          # OpenAI is the ACTIVE image-generation provider (server-side only).
+          OPENAI_API_KEY_VAL=$(getp_opt OPENAI_API_KEY)
+          OPENAI_IMAGE_MODEL_VAL=$(getp_opt OPENAI_IMAGE_MODEL)
+          [ -z "$OPENAI_IMAGE_MODEL_VAL" ] && OPENAI_IMAGE_MODEL_VAL="gpt-image-1"
+          if [ -n "$OPENAI_API_KEY_VAL" ]; then
+            echo "[deploy] OpenAI image provider configured (model $OPENAI_IMAGE_MODEL_VAL)."
           else
-            echo "[deploy] GEMINI_API_KEY empty — using fallback model $GEMINI_MODEL_VAL"
+            echo "[deploy] OPENAI_API_KEY not set — image generation will report provider_configured:false until the secret is added."
           fi
+          # Gemini is retained only as an inactive alternative provider; no live
+          # model discovery is performed (the active path is OpenAI).
+          GEMINI_API_KEY_VAL=$(getp_opt GEMINI_API_KEY)
+          GEMINI_MODEL_VAL="gemini-2.5-flash-image"
 
           # Written by redirection (values are never echoed to stdout).
           cat > .env <<ENVFILE
@@ -272,6 +279,11 @@ jobs:
           JWT_REFRESH_TTL=2592000
 
           FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID_VAL}
+          # Active image provider (OpenAI). Key is server-side only.
+          OPENAI_API_KEY=${OPENAI_API_KEY_VAL}
+          OPENAI_IMAGE_MODEL=${OPENAI_IMAGE_MODEL_VAL}
+          OPENAI_TIMEOUT_MS=120000
+          # Inactive alternative provider (kept for a fast provider swap).
           GEMINI_API_KEY=${GEMINI_API_KEY_VAL}
           GEMINI_MODEL=${GEMINI_MODEL_VAL}
           GEMINI_TIMEOUT_MS=60000
@@ -793,8 +805,17 @@ jobs:
           if [ "$code" != "200" ]; then
             echo "::error::/v1/gen-health did not return 200 (got $code)."; exit 1
           fi
+          # provider_configured reflects the OPENAI_API_KEY (a manually supplied
+          # secret). Missing key is a WARNING, not a hard failure, so unrelated
+          # backend deploys are never blocked — but the required manual action is
+          # loudly visible. Generation cannot succeed until the key is added.
+          if ! grep -q '"provider":"openai"' /tmp/gh.out; then
+            echo "::warning::Active image provider is not 'openai' (check ai.module.ts wiring)."
+          fi
           if ! grep -q '"provider_configured":true' /tmp/gh.out; then
-            echo "::error::AI provider is NOT configured (no GEMINI_API_KEY). Set the GEMINI_API_KEY GitHub secret."; exit 1
+            echo "::warning::AI provider is NOT configured (no OPENAI_API_KEY). Add the OPENAI_API_KEY GitHub Actions secret to enable image generation. Deploy continues; generation stays disabled until then."
+          else
+            echo "OK: OpenAI image provider is configured."
           fi
           if ! grep -q '"queue_reachable":true' /tmp/gh.out; then
             echo "::error::Generation queue (Redis) is NOT reachable — submitted generations would never process. Check Redis provisioning / REDIS_URL."; exit 1

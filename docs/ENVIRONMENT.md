@@ -17,19 +17,21 @@ the app, the admin panel, or GitHub.
    cd ~/StyloAI/backend
    nano .env
    ```
-2. Set the Gemini values (the key stays only in this file):
+2. Set the OpenAI values (the active image provider; the key stays only in this
+   file / SSM):
    ```env
-   GEMINI_API_KEY=your-key-here
-   GEMINI_MODEL=gemini-2.0-flash-preview-image-generation
+   OPENAI_API_KEY=your-key-here
+   OPENAI_IMAGE_MODEL=gpt-image-1
    ```
 3. Save, then reload the service so it picks up the new value:
    ```bash
    pm2 restart stylo-api
    ```
-The backend reads these with `ConfigService` in `src/ai/gemini.provider.ts`; the
-key is sent only in the outbound HTTPS call to Google and is never logged,
-returned in an API response, or exposed to Flutter or the admin panel. `.env` is
-git-ignored, so it can never be committed.
+The backend reads these with `ConfigService` in `src/ai/openai.provider.ts`; the
+key is sent only in the outbound HTTPS call to OpenAI (Authorization header) and
+is never logged, returned in an API response, or exposed to Flutter or the admin
+panel. `.env` is git-ignored, so it can never be committed. See
+`docs/OPENAI_INTEGRATION.md` for the full provider contract.
 
 > Prefer AWS SSM Parameter Store (SecureString) over a plain `.env` in a mature
 > setup — inject the values at boot; the code is unchanged.
@@ -51,8 +53,11 @@ git-ignored, so it can never be committed.
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | no | token lifetimes |
 | `FIREBASE_PROJECT_ID` | no | Firebase project |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | **yes** | Admin SDK (verify ID tokens + send FCM) — JSON or path via SSM |
-| `GEMINI_API_KEY` | **yes** | Google Gemini image API key |
-| `GEMINI_MODEL` | no | model id / default |
+| `OPENAI_API_KEY` | **yes** | OpenAI image API key (active provider; server-side only) |
+| `OPENAI_IMAGE_MODEL` | no | image model id (default `gpt-image-1`) |
+| `OPENAI_TIMEOUT_MS` | no | per-request timeout (default `120000`) |
+| `GEMINI_API_KEY` | no | inactive alternative provider key |
+| `GEMINI_MODEL` | no | inactive provider model id |
 | `AWS_REGION` | no | **production: `ap-south-1`** (Asia Pacific – Mumbai) |
 | `S3_BUCKET` | no | **production: `styloai-prod-assets-2026`** (private media bucket) |
 | `S3_UPLOAD_URL_TTL` | no | presign expiry seconds |

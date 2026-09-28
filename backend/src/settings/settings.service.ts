@@ -15,10 +15,21 @@ const DEFAULT_CREDIT_COSTS: CreditCosts = {
   hair: 4,
   glasses: 2,
   accessories: 2,
-  // Pose is a free content type — it is never charged (see GenerationsService).
+  // Per-CATEGORY default price for Pose. An admin can raise it here or per-pose;
+  // 0 = free by default. Pose fully participates in the credit system.
   pose: 0,
   ai_edit: 3,
 };
+
+/**
+ * Default ORDER of the Home category sliders (admin-overridable via the
+ * `home_sections` system setting). Backend-driven so the app can reorder the
+ * five style sliders without a release — the client never hard-codes this.
+ * Only the five style sections appear as Home category sliders; Pose has its
+ * own Explore surface and is never a Home category slider.
+ */
+export const DEFAULT_HOME_SECTIONS = ['outfit', 'hair', 'glasses', 'accessories', 'ai_edit'];
+const VALID_HOME_SECTIONS = new Set(DEFAULT_HOME_SECTIONS);
 
 /**
  * Reads admin-managed configuration from system_settings with a short in-memory
@@ -70,5 +81,26 @@ export class SettingsService {
 
   async signupBonusCredits(): Promise<number> {
     return this.get<number>('signup_bonus_credits', 0);
+  }
+
+  /**
+   * Admin-controlled ORDER of the Home category sliders. Sanitized so a bad or
+   * partial admin value can never break the Home layout: only valid style
+   * sections are kept, duplicates are dropped, and any sections the admin
+   * omitted are appended in the default order (so all five always render).
+   */
+  async homeSections(): Promise<string[]> {
+    const raw = await this.get<unknown>('home_sections', DEFAULT_HOME_SECTIONS);
+    const list = Array.isArray(raw) ? raw : DEFAULT_HOME_SECTIONS;
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    for (const s of list) {
+      if (typeof s === 'string' && VALID_HOME_SECTIONS.has(s) && !seen.has(s)) {
+        seen.add(s);
+        ordered.push(s);
+      }
+    }
+    for (const s of DEFAULT_HOME_SECTIONS) if (!seen.has(s)) ordered.push(s);
+    return ordered;
   }
 }

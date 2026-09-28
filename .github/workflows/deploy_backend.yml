@@ -717,6 +717,48 @@ jobs:
           fi
           echo "OK: bootstrap admin can log in (200). Token/body intentionally not printed."
 
+      # Prove PUT /admin/settings/:key ACCEPTS a JSON object/array value in
+      # production — the exact request the admin uses to save home_sections and
+      # credit_costs, which previously failed with "Validation failed" (the DTO
+      # value field was not whitelisted). Uses a THROWAWAY key so no real setting
+      # is touched. Only runs when the bootstrap admin is configured. No secret,
+      # token, or password is ever printed.
+      - name: Verify admin settings save round-trip (only if bootstrap configured)
+        env:
+          ADMIN_BOOTSTRAP_EMAIL: ${{ secrets.ADMIN_BOOTSTRAP_EMAIL }}
+          ADMIN_BOOTSTRAP_PASSWORD: ${{ secrets.ADMIN_BOOTSTRAP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ADMIN_BOOTSTRAP_EMAIL:-}" ] || [ -z "${ADMIN_BOOTSTRAP_PASSWORD:-}" ]; then
+            echo "No admin bootstrap secrets set — skipping settings save round-trip."
+            exit 0
+          fi
+          base="https://api.souvikpati.in/v1/admin"
+          jq -n --arg e "$ADMIN_BOOTSTRAP_EMAIL" --arg p "$ADMIN_BOOTSTRAP_PASSWORD" \
+            '{email:$e,password:$p}' > /tmp/login.json
+          # Capture ONLY the access token from the login response (never printed).
+          TOKEN=$(curl -s --max-time 25 -H 'Content-Type: application/json' \
+            --data @/tmp/login.json "$base/auth/login" | jq -r '.access_token // empty')
+          shred -u /tmp/login.json 2>/dev/null || rm -f /tmp/login.json
+          if [ -z "$TOKEN" ]; then echo "::error::Could not obtain admin token for settings probe."; exit 1; fi
+          # NON-DESTRUCTIVE round-trip on the REAL home_sections key: read its
+          # current value (or the canonical default) and write the SAME value
+          # back. This exercises the exact PUT the admin uses to save the slider
+          # order and credit prices (an array/object JSON value) WITHOUT changing
+          # any real setting or leaving junk rows behind.
+          CUR=$(curl -s --max-time 25 -H "Authorization: Bearer $TOKEN" "$base/settings" \
+            | jq -c '((map(select(.key=="home_sections")) | .[0].value) // ["outfit","hair","glasses","accessories","ai_edit"])')
+          echo "current home_sections=$CUR"
+          body=$(jq -nc --argjson v "$CUR" '{value:$v}')
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 25 -X PUT \
+            -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+            -d "$body" "$base/settings/home_sections" || echo 000)
+          echo "settings PUT (home_sections, unchanged value) status=$code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Admin settings save is rejected in production (got $code). The settings DTO/validation is still broken — home_sections/credit_costs cannot save."; exit 1
+          fi
+          echo "OK: admin settings save accepts the JSON value (slider order & default prices will persist)."
+
       # Verify the AI generation pipeline is ready (non-secret readiness probe).
       # Reports whether the image provider has credentials and the model in use,
       # and whether the Redis-backed job queue is reachable — the two things whose

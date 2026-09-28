@@ -1,4 +1,17 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   IsArray,
   IsBoolean,
@@ -248,6 +261,32 @@ export class AdminContentController {
   }
 
   // ---- Media upload (admin content images) ----
+  //
+  // Primary path: a SAME-ORIGIN proxy upload. The browser POSTs the file to the
+  // API (https://api.souvikpati.in) and the backend streams it to S3 with its
+  // own IAM credentials. This removes the browser→S3 cross-origin PUT entirely,
+  // so admin uploads never depend on the S3 bucket's CORS being correctly
+  // applied in production. It is server-side (secure) — not a client-side
+  // workaround and it does not weaken any browser security.
+  @Post('media/upload')
+  @Roles(AdminRole.super_admin, AdminRole.admin, AdminRole.content_editor)
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 15 * 1024 * 1024 } }))
+  async upload(@UploadedFile() file?: UploadedImage) {
+    if (!file || !file.buffer?.length) {
+      throw AppException.validation('No image file was received.');
+    }
+    if (!this.storage.isAllowedContentType(file.mimetype)) {
+      throw AppException.validation(
+        `Unsupported image type (${file.mimetype || 'unknown'}). Use JPG, PNG or WEBP.`,
+      );
+    }
+    const s3_key = this.storage.buildKey('admin_content', 'admin', file.mimetype);
+    await this.storage.putObject(s3_key, file.buffer, file.mimetype);
+    return { s3_key };
+  }
+
+  // Legacy presigned-PUT path kept for backward compatibility (and any external
+  // uploader). The admin panel uses the proxy upload above.
   @Post('media/presign')
   @Roles(AdminRole.super_admin, AdminRole.admin, AdminRole.content_editor)
   async presign(@Body() dto: MediaPresignDto) {
@@ -258,4 +297,12 @@ export class AdminContentController {
     const upload_url = await this.storage.presignUpload(s3_key, dto.content_type);
     return { upload_url, s3_key, expires_in: 300 };
   }
+}
+
+// Minimal shape of a multer file (avoids a dependency on @types/multer).
+interface UploadedImage {
+  buffer: Buffer;
+  mimetype: string;
+  size: number;
+  originalname: string;
 }

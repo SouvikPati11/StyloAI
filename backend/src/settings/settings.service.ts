@@ -15,9 +15,10 @@ const DEFAULT_CREDIT_COSTS: CreditCosts = {
   hair: 4,
   glasses: 2,
   accessories: 2,
-  // Per-CATEGORY default price for Pose. An admin can raise it here or per-pose;
-  // 0 = free by default. Pose fully participates in the credit system.
-  pose: 0,
+  // Pose fully participates in the credit system — it is NOT hardcoded free.
+  // This is the per-CATEGORY default; an admin can change it (including to 0 to
+  // make Pose explicitly free) or override it per-pose.
+  pose: 2,
   ai_edit: 3,
 };
 
@@ -60,8 +61,22 @@ export class SettingsService {
     else this.cache.clear();
   }
 
+  /**
+   * Admin-managed per-category default credit costs, sanitized so a bad stored
+   * value can never break pricing: every category is present, each value is a
+   * non-negative INTEGER (0 = free), negatives are clamped to 0, decimals are
+   * floored, and non-numbers fall back to the built-in default.
+   */
   async creditCosts(): Promise<CreditCosts> {
-    return this.get<CreditCosts>('credit_costs', DEFAULT_CREDIT_COSTS);
+    const stored = await this.get<Partial<Record<keyof CreditCosts, unknown>>>('credit_costs', {});
+    const out: CreditCosts = { ...DEFAULT_CREDIT_COSTS };
+    for (const key of Object.keys(DEFAULT_CREDIT_COSTS) as (keyof CreditCosts)[]) {
+      const v = stored?.[key];
+      if (typeof v === 'number' && Number.isFinite(v)) {
+        out[key] = Math.max(0, Math.floor(v));
+      }
+    }
+    return out;
   }
 
   async costFor(type: keyof CreditCosts): Promise<number> {

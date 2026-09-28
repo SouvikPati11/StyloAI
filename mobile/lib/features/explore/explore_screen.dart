@@ -223,19 +223,30 @@ class _PriceTag extends StatelessWidget {
   }
 }
 
-/// A free pose card — image + name + short instruction so the user understands
-/// the pose before selecting it. Never shows a credit price.
-class _PoseCard extends StatelessWidget {
+/// A pose card — image + name + short instruction so the user understands the
+/// pose before selecting it. Pose participates in the credit system: the price
+/// shown is the authoritative one (per-pose price, else the Pose category
+/// default from /config); only a resolved price of 0 reads as "Free".
+class _PoseCard extends ConsumerWidget {
   final Pose pose;
   const _PoseCard({required this.pose});
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final t = Theme.of(context).textTheme;
+    // Effective price = per-item price, else the Pose category default. Falls
+    // back to null (unknown) only until /config loads.
+    final int? defaultPose = ref.watch(appConfigProvider).maybeWhen(
+          data: (c) => c.creditCosts['pose'],
+          orElse: () => null,
+        );
+    final int? effectivePrice = pose.creditPrice ?? defaultPose;
     return GestureDetector(
       onTap: () {
         final q = <String, String>{
           'poseId': pose.id,
-          if (pose.creditPrice != null) 'price': '${pose.creditPrice}',
+          // Pass the authoritative price the user will be charged (item or
+          // category default) so the Create screen shows the real cost.
+          if (effectivePrice != null) 'price': '$effectivePrice',
         };
         final qs = q.entries
             .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
@@ -272,11 +283,12 @@ class _PoseCard extends StatelessWidget {
                                 .withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(AppRadii.pill),
                           ),
-                          // Free by default; shows the credit price if the admin set one.
+                          // Authoritative price: 0 (item or category default)
+                          // reads as Free; any positive value shows the cost.
                           child: Text(
-                              (pose.creditPrice == null || pose.creditPrice == 0)
-                                  ? 'Free'
-                                  : '${pose.creditPrice} cr',
+                              (effectivePrice == null)
+                                  ? '…'
+                                  : (effectivePrice == 0 ? 'Free' : '$effectivePrice cr'),
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.secondary,
                                   fontWeight: FontWeight.w700,

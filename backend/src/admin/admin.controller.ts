@@ -1,5 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
-import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { Allow, IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min } from 'class-validator';
 import { AdminRole, CreditTxnType } from '@prisma/client';
 import { AdminService } from './admin.service';
 import { AdminAuthGuard, Roles, CurrentAdmin, AdminPrincipal } from './admin-auth.guard';
@@ -14,8 +24,12 @@ class AdminLoginDto {
 }
 
 class UpdateSettingDto {
-  // value is arbitrary JSON validated per-key by the admin UI
-  value!: unknown;
+  // The value is arbitrary JSON (object/array/number/string) validated per-key
+  // by SettingsService. @Allow() whitelists the property so the global
+  // ValidationPipe (whitelist + forbidNonWhitelisted) does not reject the whole
+  // request — the earlier undecorated field was silently failing every
+  // settings save (home_sections order, credit_costs) with "Validation failed".
+  @Allow() value!: unknown;
 }
 
 class GrantCreditsDto {

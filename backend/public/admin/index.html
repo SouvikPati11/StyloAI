@@ -451,24 +451,26 @@ async function setTrendingFlag(id, on){ try{ await api('/admin/trending/'+id,{me
 function parseTags(s){ return (s||'').split(',').map(x=>x.trim()).filter(Boolean); }
 function priceOrNull(s){ const t=(s||'').trim(); if(t==='') return null; const n=parseInt(t,10); return isNaN(n)?null:Math.max(0,n); }
 async function uploadImage(file){
-  // Basic client-side validation before requesting a presigned URL.
+  // SAME-ORIGIN upload: the file is POSTed to the API (this same origin) and the
+  // backend streams it to S3 with its own IAM credentials. No cross-origin S3
+  // PUT, so the admin no longer depends on the S3 bucket's CORS being applied.
   const ALLOWED = ['image/jpeg','image/png','image/webp'];
   if(!ALLOWED.includes(file.type)) throw new Error('Unsupported image type ('+(file.type||'unknown')+'). Use JPG, PNG or WEBP.');
   if(file.size > 12*1024*1024) throw new Error('Image is too large ('+(file.size/1048576).toFixed(1)+'MB). Max 12MB.');
-  const p = await api('/admin/media/presign', { method:'POST', body: JSON.stringify({ content_type: file.type }) });
-  let put;
-  try {
-    put = await fetch(p.upload_url, { method:'PUT', headers:{'Content-Type':file.type}, body:file });
-  } catch (e) {
-    // A thrown fetch here is almost always a browser CORS rejection on the S3
-    // PUT — the bucket must allow PUT from this admin origin. Surface it clearly.
-    throw new Error('Upload to storage was blocked by the browser (likely S3 CORS). The S3 bucket must allow PUT from '+location.origin+'. Ask an admin to add a CORS rule.');
-  }
-  if(!put.ok){
-    const detail = await put.text().catch(()=> '');
-    throw new Error('Image upload failed ('+put.status+'). '+(detail? detail.slice(0,140):'Check S3 permissions/CORS.'));
-  }
-  return p.s3_key;
+  const fd = new FormData();
+  fd.append('file', file, file.name || 'upload');
+  const res = await fetch(API + '/admin/media/upload', {
+    method: 'POST',
+    // No Content-Type header: the browser sets the multipart boundary itself.
+    headers: { ...(TOKEN ? { Authorization: 'Bearer ' + TOKEN } : {}) },
+    body: fd,
+  });
+  if(res.status === 401){ logout(); throw new Error('Session expired — please sign in again.'); }
+  const body = await res.json().catch(()=>({}));
+  // Surface the REAL backend error rather than a generic guess.
+  if(!res.ok) throw new Error(body?.error?.message || ('Image upload failed ('+res.status+').'));
+  if(!body.s3_key) throw new Error('Upload succeeded but no storage key was returned.');
+  return body.s3_key;
 }
 async function createContent(){
   const err = document.getElementById('c_err'); err.textContent='';
